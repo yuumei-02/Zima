@@ -1,12 +1,15 @@
 # Copyright (c) 2026 yuumei-02. All Rights Reserved.
 # See the LICENSE file for more information.
 
+import sys
 from enum import Enum
 from utils import *
+from typing import Self
 
 class TokenKind(Enum):
    # Misc
    Eof = iota()
+   NewLine = iota()
 
    # Singe char
    LParen = iota()
@@ -33,9 +36,10 @@ class TokenKind(Enum):
    Count  = reset()
 
    def to_str(self) -> str:
-      assert TokenKind.Count.value == 16
+      assert TokenKind.Count.value == 17
       match self:
          case TokenKind.Eof:        return "Eof"
+         case TokenKind.NewLine:    return "NewLine"
          case TokenKind.LParen:     return "LParen"
          case TokenKind.RParen:     return "RParen"
          case TokenKind.Colon:      return "Colon"
@@ -54,12 +58,18 @@ class TokenKind(Enum):
          case TokenKind.Count:      return "Count"
          case _:
             unreachable()
-         
+
+keywords: dict[str, TokenKind] = {
+   "def": TokenKind.Def,
+   "return": TokenKind.Return,
+   "pass": TokenKind.Pass
+}
 
 class Token:
    kind: TokenKind
    y: int
    x: int
+   indent: int
    str_literal: str
    int_literal: int
 
@@ -67,6 +77,13 @@ class Token:
       self.kind = TokenKind.Eof
       self.y = 1
       self.x = 1
+      self.indent = 0
+
+   def define_str_literal(self) -> None:
+      self.str_literal = ""
+
+   def define_int_literal(self) -> None:
+      self.int_literal = 0
 
    def dump(self, file_path: str) -> None:
       print(f"{file_path}:{self.y}:{self.x}: info: {self.kind.to_str()}", end="")
@@ -75,17 +92,141 @@ class Token:
          case TokenKind.IntLiteral: print(f" ({self.int_literal})")
          case _: print()
 
+class LexerMode(Enum):
+   Trim = iota()
+   Word = iota()
+   IntLiteral = iota()
+   Comment = iota()
+   Count = reset()
+
 class Lexer:
    file_path: str
-   file_handle: FileHandle
+   file_contents: str
+   z: int
+   y: int
+   x: int
 
    def __init__(self, file_path: str) -> None:
+      self.z = -1
+      self.y = 1
+      self.x = 0
       self.file_path = file_path
-      self.file_handle = open(file_path, "r")
+      try:
+         with open(file_path, "r") as f:
+            self.file_contents = f.read()
+      except Exception as e:
+         print(f"[ERROR] Failed to create read from file {file_path}, reason: \"{str(e)}\"",
+            file=sys.stderr)
+         exit()
 
+   @staticmethod
+   def identifier_allowed(char: str) -> bool:
+      if char.isdigit(): return True
+      if char.isalpha(): return True
+      if char == '_': return True
+      return False
+
+   def advance(self) -> None:
+      if self.z > -1 and self.file_contents[self.z] == '\n':
+         self.y += 1
+         self.x = 0
+
+      self.x += 1
+      self.z += 1
+
+   def can_peek(self) -> bool:
+      return self.z + 1 < len(self.file_contents)
+
+   # Todo: Figure out why some new lines are outputted twice and remove them
+   #       - Yuumei-02, 00:25
    def next(self) -> Token:
-      return Token()
+      token = Token()
+      mode = LexerMode.Trim
+      skip_one_advance = False
+      int_is_negative = False
 
-   def delete(self) -> None:
-      self.file_handle.close()
+      while self.can_peek():
+         if skip_one_advance:
+            skip_one_advance = False
+         else:
+            self.advance()
+         assert LexerMode.Count.value == 4
+         match mode:
+            case LexerMode.Trim:
+               token.x = self.x
+               token.y = self.y
+               match self.file_contents[self.z]:
+                  case '+': token.kind = TokenKind.Plus;   return token
+                  case '*': token.kind = TokenKind.Star;   return token
+                  case ',': token.kind = TokenKind.Comma;  return token
+                  case ':': token.kind = TokenKind.Colon;  return token
+                  case '=': token.kind = TokenKind.Equals; return token
+                  case '(': token.kind = TokenKind.LParen; return token
+                  case ')': token.kind = TokenKind.RParen; return token
+
+                  case '-':
+                     if self.can_peek() and self.file_contents[self.z + 1] == '>':
+                        token.kind = TokenKind.Arrow
+                        self.advance()
+                        return token
+                     elif self.can_peek() and self.file_contents[self.z + 1].isdigit():
+                        token.define_int_literal()
+                        mode = LexerMode.IntLiteral
+                        int_is_negative = True
+                     else:
+                        token.kind = TokenKind.Minus
+                        return token
+
+                  case '/':
+                     if self.can_peek() and self.file_contents[self.z] == '/':
+                        mode = LexerMode.Comment
+                     else:
+                        token.kind = TokenKind.Slash
+                        return token
+
+                  case '\n':
+                     token.kind = TokenKind.NewLine
+                     return token
+
+                  case ' ':
+                     token.indent += 1
+
+                  case _:
+                     if self.file_contents[self.z].isdigit():
+                        mode = LexerMode.IntLiteral
+                        token.define_int_literal()
+                        int_is_negative = False
+                     else:
+                        mode = LexerMode.Word
+                        token.define_str_literal()
+                     skip_one_advance = True
+
+            case LexerMode.IntLiteral:
+               token.int_literal *= 10
+               token.int_literal += int(self.file_contents[self.z])
+               if self.can_peek() and not self.file_contents[self.z + 1].isdigit():
+                  token.kind = TokenKind.IntLiteral
+                  if int_is_negative:
+                     token.int_literal = -token.int_literal
+                  return token
+
+            case LexerMode.Word:
+               token.str_literal += self.file_contents[self.z]
+               if self.can_peek() and not self.identifier_allowed(self.file_contents[self.z + 1]):
+                  global keywords
+                  keyword = keywords.get(token.str_literal)
+                  if keyword == None:
+                     token.kind = TokenKind.Identifier
+                  else:
+                     token.kind = keyword
+                  return token
+
+            case LexerMode.Comment:
+               if self.file_contents[self.z] == '\n':
+                  mode = LexerMode.Trim
+
+            case _:
+               panic("unreachable")
+
+      return token
 
