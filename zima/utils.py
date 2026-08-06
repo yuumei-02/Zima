@@ -1,8 +1,8 @@
 # Copyright (c) 2026 yuumei-02. All Rights Reserved.
 # See the LICENSE file for more information.
 
-from typing import TypeAlias
-import io
+from operator import truediv
+from typing import TypeAlias, NoReturn
 
 __iota__: int = 0;
 
@@ -17,11 +17,8 @@ def reset() -> int:
    __iota__ = 0
    return old
 
-def panic(message: str) -> None:
+def panic(message: str) -> NoReturn:
    raise Exception(message)
 
-def unreachable() -> None:
+def unreachable() -> NoReturn:
    raise Exception("unreachable")
-
-FileHandle: TypeAlias = io.TextIOWrapper
-
