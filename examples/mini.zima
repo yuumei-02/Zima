@@ -1,0 +1,13 @@
+// Copyright (c) 2026 yuumei-02. All Rights Reserved.
+// See the LICENSE file for more information.
+
+def empty():
+   pass
+
+def add(a: int, b: int) -> int:
+   result: int = a + b
+   return result
+
+def main():
+   val := add(1, 2)
+
