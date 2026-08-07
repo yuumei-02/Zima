@@ -3,8 +3,8 @@
 
 // This is not an example but rather a testing ground for developing the compiler.
 
-def empty():
-   pass
+def empty() -> int:
+   return 1
 
 def add(a: int, b: int) -> int:
    result: int = a + b

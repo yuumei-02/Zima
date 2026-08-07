@@ -1,6 +1,6 @@
 # Copyright (c) 2026 yuumei-02. All Rights Reserved.
 # See the LICENSE file for more information.
-
+from abc import abstractmethod
 from dataclasses import dataclass
 from lexer import *
 from typing import TypeAlias
@@ -38,14 +38,117 @@ class ParsingState:
    def exit_panic(self) -> None:
       self.panic = False
 
+class Operator(Enum):
+   Add = iota()
+   Sub = iota()
+   Mul = iota()
+   Div = iota()
+   Count = reset()
+
+   @staticmethod
+   def try_parse_bin_op_token(kind: TokenKind) -> "Operator | None":
+      assert Operator.Count.value == 4
+      match kind:
+         case TokenKind.Plus:  return Operator.Add
+         case TokenKind.Minus: return Operator.Sub
+         case TokenKind.Star:  return Operator.Mul
+         case TokenKind.Slash: return Operator.Div
+         case _: return None
+
+   def to_str(self) -> str:
+      assert Operator.Count.value == 4
+      match self:
+         case Operator.Add: return "Add"
+         case Operator.Sub: return "Sub"
+         case Operator.Mul: return "Mul"
+         case Operator.Div: return "Div"
+         case _:
+            panic("unreachable")
+
+   def precedence(self) -> int:
+      assert Operator.Count.value == 4
+      match self:
+         case Operator.Mul | Operator.Div: return 12
+         case Operator.Add | Operator.Sub: return 11
+         case _:
+            panic("unreachable")
+
+   def left_associative(self) -> bool:
+      assert Operator.Count.value == 4
+      match self:
+         case Operator.Add: return True
+         case Operator.Sub: return True
+         case Operator.Mul: return True
+         case Operator.Div: return True
+         case _:
+            panic("unreachable")
+
+   def is_binary(self) -> bool:
+      assert Operator.Count.value == 4
+      match self:
+         case Operator.Mul: return True
+         case Operator.Add: return True
+         case Operator.Sub: return True
+         case Operator.Mul: return True
+         case Operator.Div: return True
+         case _:
+            panic("unreachable")
+
 class AstNodeKind(Enum):
+   # Declarations
    Module = iota()
    Procedure = iota()
    Parameter = iota()
+
+   # Statements
+   Return = iota()
+
+   # Expressions
+   BinOp = iota()
+   IntLiteral = iota()
+   Identifier = iota()
    Count = reset()
 
 class AstNode:
    kind: AstNodeKind
+
+   @staticmethod
+   def parse_atom(lexer: Lexer, ast: "Ast", state: ParsingState) -> ANI:
+      token: Token = lexer.next()
+      match token.kind:
+         case TokenKind.IntLiteral:
+            ast.nodes.append(AstIntLiteral(token))
+            return len(ast.nodes) - 1
+
+         case TokenKind.Identifier:
+            ast.nodes.append(AstIdentifier(token))
+            return len(ast.nodes) - 1
+
+         case _:
+            state.enter_panic()
+            reporter.unexpected_token(lexer.file_path, token, [])
+            return -1
+
+   @staticmethod
+   def parse_expression(precedence: int, lexer: Lexer, ast: "Ast", state: ParsingState) -> ANI:
+      lhs: ANI = AstNode.parse_atom(lexer, ast, state)
+      if lhs < 0: return lhs
+
+      while True:
+         token: Token = lexer.next()
+         op: Operator | None = Operator.try_parse_bin_op_token(token.kind)
+         if op is None or op.precedence() < precedence:
+            lexer.undo(token)
+            return lhs
+
+         next_precedence: int = op.precedence()
+         if op.left_associative():
+            next_precedence += 1
+
+         rhs: ANI = AstNode.parse_expression(next_precedence, lexer, ast, state)
+         if op.is_binary():
+            ast.nodes.append(AstBinOp(op, lhs, rhs))
+            lhs = len(ast.nodes) - 1
 
    # This procedure may fail.
    # To check if this procedure failed, check [state] for panic mode
@@ -66,19 +169,30 @@ class AstNode:
 
       indent_level: int = token.indent
       self: list[ANI] = []
+      check_indent = False
       while True:
          token = lexer.next()
-         if token.kind == TokenKind.NewLine: continue
-         if token.kind == TokenKind.Eof or token.indent <= current_indent:
+         if token.kind == TokenKind.NewLine:
+            check_indent = True
+            continue
+
+         if token.kind == TokenKind.Eof or (check_indent and token.indent <= current_indent):
             lexer.undo(token)
             return self
 
-         if token.indent > indent_level:
+         if check_indent and token.indent > indent_level:
             if state.panic: continue
             state.enter_panic()
             reporter.over_indent(lexer.file_path, token)
+            continue
+         else:
+            check_indent = False
 
          match token.kind:
+            case TokenKind.Return:
+               state.exit_panic()
+               self.append(AstReturn.parse(lexer, ast, state))
+
             case TokenKind.Pass:
                state.exit_panic()
 
@@ -88,7 +202,60 @@ class AstNode:
                reporter.unexpected_token(lexer.file_path, token, [])
 
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
-      pass
+      assert False, "Unimplemented base class"
+
+class AstBinOp(AstNode):
+   operator: Operator
+   lhs: ANI
+   rhs: ANI
+
+   def __init__(self, operator: Operator, lhs: ANI, rhs: ANI) -> None:
+      self.operator = operator
+      self.lhs = lhs
+      self.rhs = rhs
+
+   def display(self, ast: "Ast", prefix: str, last: bool) -> None:
+      print(f"{prefix}{TreePrinter.bool_to_connector(last)}{self.operator.to_str()}")
+      prefix += TreePrinter.last_to_prefix_append(last)
+      ast.nodes[self.lhs].display(ast, prefix, False)
+      ast.nodes[self.rhs].display(ast, prefix, True)
+
+class AstIdentifier(AstNode):
+   value: Token
+
+   def __init__(self, value: Token) -> None:
+      assert value.kind == TokenKind.Identifier
+      self.value = value
+
+   def display(self, ast: "Ast", prefix: str, last: bool) -> None:
+      print(f"{prefix}{TreePrinter.bool_to_connector(last)}{self.value.str_literal}")
+
+class AstIntLiteral(AstNode):
+   value: Token
+
+   def __init__(self, value: Token) -> None:
+      assert value.kind == TokenKind.IntLiteral
+      self.value = value
+
+   def display(self, ast: "Ast", prefix: str, last: bool) -> None:
+      print(f"{prefix}{TreePrinter.bool_to_connector(last)}{self.value.int_literal}")
+
+class AstReturn(AstNode):
+   expression: ANI
+
+   def __init__(self, expression: ANI) -> None:
+      self.expression = expression
+
+   @staticmethod
+   def parse(lexer: Lexer, ast: "Ast", state: ParsingState) -> ANI:
+      self = AstReturn(AstNode.parse_expression(-1, lexer, ast, state))
+      ast.nodes.append(self)
+      return len(ast.nodes) - 1
+
+   def display(self, ast: "Ast", prefix: str, last: bool) -> None:
+      print(f"{prefix}{TreePrinter.bool_to_connector(last)}Return")
+      prefix += TreePrinter.last_to_prefix_append(last)
+      ast.nodes[self.expression].display(ast, prefix, True)
 
 class AstParameter(AstNode):
    name: Token
@@ -200,12 +367,12 @@ class AstProcedure(AstNode):
       new_prefix = prefix + TreePrinter.last_to_prefix_append(False)
       for i, ani in enumerate(self.return_types):
          if ani >= 0:
-            ast.nodes[ani].display(ast, new_prefix + "  ", i + 1 > len(self.return_types))
+            ast.nodes[ani].display(ast, new_prefix, i + 1 > len(self.return_types))
 
       print(f"{prefix}└─Body")
       new_prefix = prefix + TreePrinter.last_to_prefix_append(True)
       for i, ani in enumerate(self.body):
-         ast.nodes[ani].display(ast, new_prefix + "  ", i + 1 >= len(self.body))
+         ast.nodes[ani].display(ast, new_prefix, i + 1 >= len(self.body))
 
 @dataclass
 class AstModule(AstNode):

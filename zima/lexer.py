@@ -190,7 +190,7 @@ class Lexer:
                         return token
 
                   case '/':
-                     if self.can_peek() and self.file_contents[self.z] == '/':
+                     if self.can_peek() and self.file_contents[self.z + 1] == '/':
                         mode = LexerMode.Comment
                      else:
                         token.kind = TokenKind.Slash
