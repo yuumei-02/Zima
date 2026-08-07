@@ -4,7 +4,6 @@
 import sys
 from enum import Enum
 from utils import *
-from typing import Self
 
 class TokenKind(Enum):
    # Misc
@@ -86,7 +85,7 @@ class Token:
       self.int_literal = 0
 
    def dump(self, file_path: str) -> None:
-      print(f"{file_path}:{self.y}:{self.x}: info: {self.kind.to_str()}", end="")
+      print(f"{file_path}:{self.y}:{self.x}: info: ({self.indent}) {self.kind.to_str()}", end="")
       match self.kind:
          case TokenKind.Identifier: print(f" ({self.str_literal})")
          case TokenKind.IntLiteral: print(f" ({self.int_literal})")
@@ -215,7 +214,7 @@ class Lexer:
                if self.can_peek() and not self.identifier_allowed(self.file_contents[self.z + 1]):
                   global keywords
                   keyword = keywords.get(token.str_literal)
-                  if keyword == None:
+                  if keyword is None:
                      token.kind = TokenKind.Identifier
                   else:
                      token.kind = keyword
