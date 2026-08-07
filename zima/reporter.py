@@ -4,7 +4,7 @@
 from lexer import *
 
 # Todo: Expand [path] to an absolute path using pathlib
-def unexpected_token(path: str, token: Token, expected: list[TokenKind]) -> None:
+def unexpected_token(path: str, token: "Token", expected: list["TokenKind"]) -> None:
    print(f"{path}:{token.y}:{token.x}: error: Unexpected token \"{token.kind.to_str()}\"", file=sys.stderr, end="")
 
    match len(expected):
@@ -20,8 +20,8 @@ def unexpected_token(path: str, token: Token, expected: list[TokenKind]) -> None
             else:
                print(f" or {expected[i + 1].to_str()}", file=sys.stderr)
 
-def under_indent(path: str, token: Token) -> None:
+def under_indent(path: str, token: "Token") -> None:
    print(f"{path}:{token.y}:{token.x}: error: Expected an indentation greater than that of the previous block.", file=sys.stderr)
 
-def over_indent(path: str, token: Token) -> None:
+def over_indent(path: str, token: "Token") -> None:
    print(f"{path}:{token.y}:{token.x}: error: Expected an indentation equal to that of the current block.", file=sys.stderr)

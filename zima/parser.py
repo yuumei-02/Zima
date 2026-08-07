@@ -1,7 +1,6 @@
 # Copyright (c) 2026 yuumei-02. All Rights Reserved.
 # See the LICENSE file for more information.
 
-from dataclasses import dataclass
 from lexer import *
 from typing import TypeAlias
 from pathlib import Path
@@ -97,6 +96,7 @@ class Operator(Enum):
 class AstNodeKind(Enum):
    # Declarations
    Module = iota()
+   Class = iota()
    Procedure = iota()
    Parameter = iota()
    Variable = iota()
@@ -184,20 +184,17 @@ class AstNode:
       self: list[ANI] = []
       while True:
          token = lexer.next()
-         if token.kind == TokenKind.NewLine:
-            continue
-
-         if token.kind == TokenKind.Eof:
-            return self
+         if token.kind == TokenKind.NewLine: continue
+         if token.kind == TokenKind.Eof: return self
 
          if token.indent <= current_indent:
             lexer.undo(token)
             return self
 
          if token.indent > indent_level:
-            if state.panic: continue
-            state.enter_panic()
-            reporter.over_indent(lexer.file_path, token)
+            if not state.panic:
+               state.enter_panic()
+               reporter.over_indent(lexer.file_path, token)
             continue
 
          match token.kind:
@@ -218,6 +215,7 @@ class AstNode:
                   self.append(AstNode.parse_expression(-1, lexer, ast, state))
 
             case TokenKind.Scope:
+               state.exit_panic()
                scope: ANI = AstScope.parse(token.indent, lexer, ast, state)
                if scope >= 0:
                   self.append(scope)
@@ -382,6 +380,7 @@ class AstReturn(AstNode):
       if self.expression >= 0:
          ast.nodes[self.expression].display(ast, prefix, True)
 
+# Todo: Allow type to be inferred in the case of the self parameter in class methods
 class AstParameter(AstNode):
    name: Token
    type: Token
@@ -425,15 +424,81 @@ class AstScope(AstNode):
       return len(ast.nodes) - 1
 
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
-      print(f"{prefix}{TreePrinter.bool_to_connector(last)}scope", end="")
+      print(f"{prefix}{TreePrinter.bool_to_connector(last)}Scope", end="")
       if self.name is not None:
-         print(f" {self.name.str_literal}")
+         print(f": {self.name.str_literal}")
       else:
          print("")
       prefix += TreePrinter.last_to_prefix_append(last)
       for i, ani in enumerate(self.body):
-         current_is_last: bool = i + 1 >= len(self.body)
-         ast.nodes[ani].display(ast, prefix, current_is_last)
+         ast.nodes[ani].display(ast, prefix, i + 1 >= len(self.body))
+
+class AstClass(AstNode):
+   name: Token
+   fields: list[ANI]
+
+   @staticmethod
+   def parse(current_indent: int, lexer: Lexer, ast: "Ast", state: ParsingState) -> ANI:
+      self = AstClass()
+      self.name = lexer.next()
+      self.fields = []
+
+      if self.name.kind != TokenKind.Identifier:
+         state.enter_panic()
+         reporter.unexpected_token(lexer.file_path, self.name, [TokenKind.Identifier])
+         return -1
+
+      token: Token = lexer.next()
+      if token.kind != TokenKind.Colon:
+         state.enter_panic()
+         reporter.unexpected_token(lexer.file_path, self.name, [TokenKind.Colon])
+         return -1
+
+      token = lexer.peek()
+      while token.kind == TokenKind.NewLine:
+         lexer.next()
+         token = lexer.peek()
+      indent_level: int = token.indent
+
+      while True:
+         token = lexer.next()
+
+         if token.kind == TokenKind.Eof: break
+         if token.kind == TokenKind.NewLine: continue
+
+         if token.indent <= current_indent:
+            lexer.undo(token)
+            break
+
+         if token.indent > indent_level:
+            if not state.panic:
+               state.enter_panic()
+               reporter.unexpected_token(lexer.file_path, token, [])
+            continue
+
+         match token.kind:
+            case TokenKind.Identifier:
+               lexer.next_and_expect(state, [TokenKind.Colon])
+               if state.panic: continue
+               field_type: Token = lexer.next_and_expect(state, [TokenKind.Identifier])
+               if state.panic: continue
+               ast.nodes.append(AstParameter(token, field_type))
+               self.fields.append(len(ast.nodes) - 1)
+
+            case _:
+               if not state.panic:
+                  state.enter_panic()
+                  reporter.unexpected_token(lexer.file_path, token, [])
+               return -1
+
+      ast.nodes.append(self)
+      return len(ast.nodes) - 1
+
+   def display(self, ast: "Ast", prefix: str, last: bool) -> None:
+      print(f"{prefix}{TreePrinter.bool_to_connector(last)}Class: {self.name.str_literal}")
+      prefix += TreePrinter.last_to_prefix_append(last)
+      for i, ani in enumerate(self.fields):
+         ast.nodes[ani].display(ast, prefix, i + 1 >= len(self.fields))
 
 class AstProcedure(AstNode):
    name: Token
@@ -523,7 +588,7 @@ class AstProcedure(AstNode):
       return len(ast.nodes) - 1
 
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
-      print(f"{prefix}{TreePrinter.bool_to_connector(last)}Procedure {self.name.str_literal}")
+      print(f"{prefix}{TreePrinter.bool_to_connector(last)}Procedure: {self.name.str_literal}")
       prefix += TreePrinter.last_to_prefix_append(last)
       print(f"{prefix}├─Parameters")
       new_prefix = prefix + TreePrinter.last_to_prefix_append(False)
@@ -541,10 +606,15 @@ class AstProcedure(AstNode):
       for i, ani in enumerate(self.body):
          ast.nodes[ani].display(ast, new_prefix, i + 1 >= len(self.body))
 
-@dataclass
 class AstModule(AstNode):
    name: str
    procedures: list[ANI]
+   types: list[ANI]
+
+   def __init__(self, name: str) -> None:
+      self.name = name
+      self.procedures = []
+      self.types = []
 
    # May return [None] when [file_path] does not exist or is not a file.
    @staticmethod
@@ -555,7 +625,7 @@ class AstModule(AstNode):
 
       lexer = Lexer(file_path)
       state = ParsingState()
-      self = AstModule(Path(file_path).stem, [])
+      self = AstModule(Path(file_path).stem)
 
       while True:
          token: Token = lexer.next()
@@ -565,6 +635,12 @@ class AstModule(AstNode):
                proc: ANI = AstProcedure.parse(lexer, ast, state)
                if proc >= 0:
                   self.procedures.append(proc)
+
+            case TokenKind.Class:
+               state.exit_panic()
+               class_decl: ANI = AstClass.parse(token.indent, lexer, ast, state)
+               if class_decl >= 0:
+                  self.types.append(class_decl)
 
             case TokenKind.Eof: break
             case TokenKind.NewLine: pass
@@ -577,11 +653,18 @@ class AstModule(AstNode):
       return self
 
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
-      print(f"{prefix}{TreePrinter.bool_to_connector(last)}Module {self.name}")
+      print(f"{prefix}{TreePrinter.bool_to_connector(last)}Module: {self.name}")
       prefix += TreePrinter.last_to_prefix_append(last)
+      print(f"{prefix}├─Types")
+
+      new_prefix: str = prefix + TreePrinter.last_to_prefix_append(False)
+      for i, ani in enumerate(self.types):
+         ast.nodes[ani].display(ast, new_prefix, i + 1 >= len(self.types))
+
+      new_prefix = prefix + TreePrinter.last_to_prefix_append(True)
       print(f"{prefix}└─Procedures")
       for i, ani in enumerate(self.procedures):
-         ast.nodes[ani].display(ast, prefix + "  ", i + 1 >= len(self.procedures))
+         ast.nodes[ani].display(ast, new_prefix, i + 1 >= len(self.procedures))
 
 class Ast:
    modules: list[AstNode]

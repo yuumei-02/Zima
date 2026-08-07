@@ -4,6 +4,7 @@
 import sys
 from enum import Enum
 from utils import *
+import reporter
 
 class TokenKind(Enum):
    # Misc
@@ -30,6 +31,7 @@ class TokenKind(Enum):
    StrLiteral = iota()
 
    # Keywords
+   Class  = iota()
    Def    = iota()
    Return = iota()
    Scope  = iota()
@@ -37,7 +39,7 @@ class TokenKind(Enum):
    Count  = reset()
 
    def to_str(self) -> str:
-      assert TokenKind.Count.value == 19
+      assert TokenKind.Count.value == 20
       match self:
          case TokenKind.Eof:        return "Eof"
          case TokenKind.NewLine:    return "NewLine"
@@ -54,6 +56,7 @@ class TokenKind(Enum):
          case TokenKind.Identifier: return "Identifier"
          case TokenKind.IntLiteral: return "IntLiteral"
          case TokenKind.StrLiteral: return "StrLiteral"
+         case TokenKind.Class:      return "Class"
          case TokenKind.Def:        return "Def"
          case TokenKind.Return:     return "Return"
          case TokenKind.Scope:      return "Scope"
@@ -63,6 +66,7 @@ class TokenKind(Enum):
             unreachable()
 
 keywords: dict[str, TokenKind] = {
+   "class": TokenKind.Class,
    "def": TokenKind.Def,
    "return": TokenKind.Return,
    "scope": TokenKind.Scope,
@@ -144,6 +148,14 @@ class Lexer:
 
    def can_peek(self) -> bool:
       return self.z + 1 < len(self.file_contents)
+
+   def next_and_expect(self, state, expected: list[TokenKind]) -> Token:
+      token: Token = self.next()
+      if token.kind not in expected:
+         if not state.panic:
+            state.enter_panic()
+            reporter.unexpected_token(self.file_path, token, expected)
+      return token
 
    def undo(self, token: Token) -> None:
       self.undone_tokens.append(token)
