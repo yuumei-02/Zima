@@ -109,6 +109,7 @@ class AstNodeKind(Enum):
    BinOp = iota()
    ProcedureCall = iota()
    IntLiteral = iota()
+   StrLiteral = iota()
    Identifier = iota()
    Count = reset()
 
@@ -121,6 +122,10 @@ class AstNode:
       match token.kind:
          case TokenKind.IntLiteral:
             ast.nodes.append(AstIntLiteral(token))
+            return len(ast.nodes) - 1
+
+         case TokenKind.StrLiteral:
+            ast.nodes.append(AstStrLiteral(token))
             return len(ast.nodes) - 1
 
          case TokenKind.Identifier:
@@ -287,6 +292,16 @@ class AstIdentifier(AstNode):
 
    def __init__(self, value: Token) -> None:
       assert value.kind == TokenKind.Identifier
+      self.value = value
+
+   def display(self, ast: "Ast", prefix: str, last: bool) -> None:
+      print(f"{prefix}{TreePrinter.bool_to_connector(last)}{self.value.str_literal}")
+
+class AstStrLiteral(AstNode):
+   value: Token
+
+   def __init__(self, value: Token) -> None:
+      assert value.kind == TokenKind.StrLiteral
       self.value = value
 
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
