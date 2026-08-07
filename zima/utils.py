@@ -1,10 +1,11 @@
 # Copyright (c) 2026 yuumei-02. All Rights Reserved.
 # See the LICENSE file for more information.
 
+from enum import Enum
 from operator import truediv
 from typing import TypeAlias, NoReturn
 
-__iota__: int = 0;
+__iota__: int = 0
 
 def iota() -> int:
    global __iota__
@@ -22,3 +23,9 @@ def panic(message: str) -> NoReturn:
 
 def unreachable() -> NoReturn:
    raise Exception("unreachable")
+
+class TriBool(Enum):
+   false = iota()
+   true = iota()
+   neutral = iota()
+   count = reset()
