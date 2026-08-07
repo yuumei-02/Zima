@@ -19,6 +19,7 @@ Atoms are literals that make up expressions.
 Atoms on their own are expressions but can also be combined using operators to create compound expressions
 
 ## Operators
+```
 +------------+-------------------+------------+---------------+----------+--------------------------------+
 |    Type    |     Operator      | Precedence | Associativity | Operands |          Description           |
 +------------+-------------------+------------+---------------+----------+--------------------------------+
@@ -43,6 +44,7 @@ Atoms on their own are expressions but can also be combined using operators to c
 |            | cast(type)        | 13         |               |          | cast to type                   |
 |            | reinterpret(type) | 13         |               |          | reinterpet as type             |
 +------------+-------------------+------------+---------------+----------+--------------------------------+
+```
 
 Operator precedence is the priority a operator has over another operator.
 The higher the precedence, the more priority the operator has.
