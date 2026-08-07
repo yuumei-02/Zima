@@ -99,6 +99,7 @@ class AstNodeKind(Enum):
    Module = iota()
    Procedure = iota()
    Parameter = iota()
+   Variable = iota()
 
    # Statements
    Return = iota()
@@ -193,6 +194,18 @@ class AstNode:
                state.exit_panic()
                self.append(AstReturn.parse(lexer, ast, state))
 
+            case TokenKind.Identifier:
+               state.exit_panic()
+               peek: Token = lexer.peek()
+               if peek.kind == TokenKind.Colon:
+                  lexer.next()
+                  variable: ANI = AstVariable.parse(token, lexer, ast, state)
+                  if variable >= 0:
+                     self.append(variable)
+               else:
+                  lexer.undo(token)
+                  self.append(AstNode.parse_expression(-1, lexer, ast, state))
+
             case TokenKind.Pass:
                state.exit_panic()
 
@@ -239,6 +252,52 @@ class AstIntLiteral(AstNode):
 
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
       print(f"{prefix}{TreePrinter.bool_to_connector(last)}{self.value.int_literal}")
+
+class AstVariable(AstNode):
+   name: Token
+   type: Token | str | None # Explicit type | inferred type | implicit type before inference
+   expression: ANI
+
+   # Expects that the name and type colon part of the variable declaration syntax has already been parsed
+   @staticmethod
+   def parse(name: Token, lexer: Lexer, ast: "Ast", state: ParsingState) -> ANI:
+      self = AstVariable()
+      self.name = name
+
+      token: Token = lexer.next()
+      match token.kind:
+         case TokenKind.Identifier:
+            self.type = token
+            token = lexer.next()
+            match token.kind:
+               case TokenKind.NewLine: pass
+               case TokenKind.Equals:
+                  self.expression = AstNode.parse_expression(-1, lexer, ast, state)
+
+               case _:
+                  state.enter_panic()
+                  reporter.unexpected_token(lexer.file_path, token, [TokenKind.Equals, TokenKind.NewLine])
+                  return -1
+
+         case TokenKind.Equals:
+            self.type = None
+            self.expression = AstNode.parse_expression(-1, lexer, ast, state)
+
+         case _:
+            state.enter_panic()
+            reporter.unexpected_token(lexer.file_path, token, [TokenKind.Identifier, TokenKind.Equals])
+            return -1
+
+      ast.nodes.append(self)
+      return len(ast.nodes) - 1
+
+   def display(self, ast: "Ast", prefix: str, last: bool) -> None:
+      print(f"{prefix}{TreePrinter.bool_to_connector(last)}{self.name.str_literal}: ", end="")
+      if isinstance(self.type, Token): print(self.type.str_literal)
+      elif isinstance(self.type, str): print(self.type)
+      else:                            print("@infer")
+      prefix += TreePrinter.last_to_prefix_append(last)
+      ast.nodes[self.expression].display(ast, prefix, True)
 
 class AstReturn(AstNode):
    expression: ANI
