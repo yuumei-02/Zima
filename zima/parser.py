@@ -1,6 +1,6 @@
 # Copyright (c) 2026 yuumei-02. All Rights Reserved.
 # See the LICENSE file for more information.
-from abc import abstractmethod
+
 from dataclasses import dataclass
 from lexer import *
 from typing import TypeAlias
@@ -106,6 +106,7 @@ class AstNodeKind(Enum):
 
    # Expressions
    BinOp = iota()
+   ProcedureCall = iota()
    IntLiteral = iota()
    Identifier = iota()
    Count = reset()
@@ -122,8 +123,13 @@ class AstNode:
             return len(ast.nodes) - 1
 
          case TokenKind.Identifier:
-            ast.nodes.append(AstIdentifier(token))
-            return len(ast.nodes) - 1
+            peek: Token = lexer.peek()
+            if peek.kind != TokenKind.LParen:
+               ast.nodes.append(AstIdentifier(token))
+               return len(ast.nodes) - 1
+
+            lexer.next()
+            return AstProcedureCall.parse(token, lexer, ast, state)
 
          case _:
             state.enter_panic()
@@ -232,6 +238,44 @@ class AstBinOp(AstNode):
       prefix += TreePrinter.last_to_prefix_append(last)
       ast.nodes[self.lhs].display(ast, prefix, False)
       ast.nodes[self.rhs].display(ast, prefix, True)
+
+class AstProcedureCall(AstNode):
+   procedure: Token
+   parameters: list[ANI]
+
+   def __init__(self, procedure: Token) -> None:
+      assert procedure.kind == TokenKind.Identifier
+      self.procedure = procedure
+      self.parameters = []
+
+   # Expects that the procedure name and the LParen part of the procedure call syntax has already been parsed.
+   @staticmethod
+   def parse(procedure: Token, lexer: Lexer, ast: "Ast", state: ParsingState) -> ANI:
+      self = AstProcedureCall(procedure)
+
+      while True:
+         self.parameters.append(AstNode.parse_expression(-1, lexer, ast, state))
+         token: Token = lexer.next()
+
+         match token.kind:
+            case TokenKind.RParen:
+               state.exit_panic()
+               ast.nodes.append(self)
+               return len(ast.nodes) - 1
+
+            case TokenKind.Comma:
+               pass
+
+            case _:
+               if not state.panic:
+                  state.enter_panic()
+                  reporter.unexpected_token(lexer.file_path, token, [TokenKind.Comma, TokenKind.RParen])
+
+   def display(self, ast: "Ast", prefix: str, last: bool) -> None:
+      print(f"{prefix}{TreePrinter.bool_to_connector(last)}{self.procedure.str_literal}")
+      prefix += TreePrinter.last_to_prefix_append(last)
+      for i, ani in enumerate(self.parameters):
+         ast.nodes[ani].display(ast, prefix, i + 1 >= len(self.parameters))
 
 class AstIdentifier(AstNode):
    value: Token
