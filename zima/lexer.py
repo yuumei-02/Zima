@@ -104,12 +104,14 @@ class Lexer:
    z: int
    y: int
    x: int
+   undone_tokens: list[Token]
 
    def __init__(self, file_path: str) -> None:
       self.z = -1
       self.y = 1
       self.x = 0
       self.file_path = file_path
+      self.undone_tokens = []
       try:
          with open(file_path, "r") as f:
             self.file_contents = f.read()
@@ -136,9 +138,20 @@ class Lexer:
    def can_peek(self) -> bool:
       return self.z + 1 < len(self.file_contents)
 
+   def undo(self, token: Token) -> None:
+      self.undone_tokens.append(token)
+
+   def peek(self) -> Token:
+      token: Token = self.next()
+      self.undone_tokens.append(token)
+      return token
+
    # Todo: Figure out why some new lines are outputted twice and remove them
    #       - Yuumei-02, 00:25
    def next(self) -> Token:
+      if len(self.undone_tokens) > 0:
+         return self.undone_tokens.pop(len(self.undone_tokens) - 1)
+
       token = Token()
       mode = LexerMode.Trim
       skip_one_advance = False

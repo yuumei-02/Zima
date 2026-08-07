@@ -47,6 +47,46 @@ class AstNodeKind(Enum):
 class AstNode:
    kind: AstNodeKind
 
+   # This procedure may fail.
+   # To check if this procedure failed, check [state] for panic mode
+   @staticmethod
+   def parse_code_block(current_indent: int, lexer: Lexer, ast: "Ast", state: ParsingState) -> list[ANI]:
+      token: Token = lexer.peek()
+      while token.kind == TokenKind.NewLine:
+         lexer.next()
+         token = lexer.peek()
+
+      if token.kind == TokenKind.Eof:
+         return []
+
+      if token.indent <= current_indent:
+         state.enter_panic()
+         reporter.under_indent(lexer.file_path, token)
+         return []
+
+      indent_level: int = token.indent
+      self: list[ANI] = []
+      while True:
+         token = lexer.next()
+         if token.kind == TokenKind.NewLine: continue
+         if token.kind == TokenKind.Eof or token.indent <= current_indent:
+            lexer.undo(token)
+            return self
+
+         if token.indent > indent_level:
+            if state.panic: continue
+            state.enter_panic()
+            reporter.over_indent(lexer.file_path, token)
+
+         match token.kind:
+            case TokenKind.Pass:
+               state.exit_panic()
+
+            case _:
+               if state.panic: continue
+               state.enter_panic()
+               reporter.unexpected_token(lexer.file_path, token, [])
+
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
       pass
 
@@ -76,6 +116,7 @@ class AstProcedure(AstNode):
    @staticmethod
    def parse(lexer: Lexer, ast: "Ast", state: ParsingState) -> ANI:
       self = AstProcedure(lexer.next())
+      current_indent: int = self.name.indent
       if self.name.kind != TokenKind.Identifier:
          state.enter_panic()
          reporter.unexpected_token(lexer.file_path, self.name, [TokenKind.Identifier])
@@ -132,6 +173,7 @@ class AstProcedure(AstNode):
 
             case TokenKind.Colon:
                if colon_as_end:
+                  self.body = self.parse_code_block(current_indent, lexer, ast, state)
                   break
                expected = [TokenKind.Identifier]
                identifier_as_type = TriBool.true
