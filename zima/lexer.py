@@ -27,15 +27,17 @@ class TokenKind(Enum):
    # Literals
    Identifier = iota()
    IntLiteral = iota()
+   StrLiteral = iota()
 
    # Keywords
    Def    = iota()
    Return = iota()
+   Scope  = iota()
    Pass   = iota()
    Count  = reset()
 
    def to_str(self) -> str:
-      assert TokenKind.Count.value == 17
+      assert TokenKind.Count.value == 19
       match self:
          case TokenKind.Eof:        return "Eof"
          case TokenKind.NewLine:    return "NewLine"
@@ -51,8 +53,10 @@ class TokenKind(Enum):
          case TokenKind.Arrow:      return "Arrow"
          case TokenKind.Identifier: return "Identifier"
          case TokenKind.IntLiteral: return "IntLiteral"
+         case TokenKind.StrLiteral: return "StrLiteral"
          case TokenKind.Def:        return "Def"
          case TokenKind.Return:     return "Return"
+         case TokenKind.Scope:      return "Scope"
          case TokenKind.Pass:       return "Pass"
          case TokenKind.Count:      return "Count"
          case _:
@@ -61,6 +65,7 @@ class TokenKind(Enum):
 keywords: dict[str, TokenKind] = {
    "def": TokenKind.Def,
    "return": TokenKind.Return,
+   "scope": TokenKind.Scope,
    "pass": TokenKind.Pass
 }
 
@@ -89,12 +94,14 @@ class Token:
       match self.kind:
          case TokenKind.Identifier: print(f" ({self.str_literal})")
          case TokenKind.IntLiteral: print(f" ({self.int_literal})")
+         case TokenKind.StrLiteral: print(f" ({self.str_literal})") # @Todo: Unescape string
          case _: print()
 
 class LexerMode(Enum):
    Trim = iota()
    Word = iota()
    IntLiteral = iota()
+   StrLiteral = iota()
    Comment = iota()
    Count = reset()
 
@@ -162,7 +169,7 @@ class Lexer:
             skip_one_advance = False
          else:
             self.advance()
-         assert LexerMode.Count.value == 4
+         assert LexerMode.Count.value == 5
          match mode:
             case LexerMode.Trim:
                token.x = self.x
@@ -203,6 +210,10 @@ class Lexer:
                   case ' ':
                      token.indent += 1
 
+                  case "\"":
+                     token.define_str_literal()
+                     mode = LexerMode.StrLiteral
+
                   case _:
                      if self.file_contents[self.z].isdigit():
                         mode = LexerMode.IntLiteral
@@ -221,6 +232,13 @@ class Lexer:
                   if int_is_negative:
                      token.int_literal = -token.int_literal
                   return token
+
+            case LexerMode.StrLiteral:
+               if self.file_contents[self.z] == "\"":
+                  token.kind = TokenKind.StrLiteral
+                  return token
+
+               token.str_literal += self.file_contents[self.z]
 
             case LexerMode.Word:
                token.str_literal += self.file_contents[self.z]

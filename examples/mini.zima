@@ -3,6 +3,12 @@
 
 // This is not an example but rather a testing ground for developing the compiler.
 
+def scopes():
+   scope:
+      return 40
+   scope "named scope":
+      return 90
+
 def empty() -> int:
    return 1
 
