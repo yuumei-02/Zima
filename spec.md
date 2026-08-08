@@ -40,9 +40,10 @@ Atoms on their own are expressions but can also be combined using operators to c
 |            | |                 | 5          |               |          | or                             |
 +------------+-------------------+------------+---------------+----------+--------------------------------+
 | Misc       | &                 | 13         | right to left | unary    | address of                     |
-|            | sizeof(type)      | 13         |               |          | size of type
+|            | sizeof(type)      | 13         |               |          | size of type                   |
 |            | cast(type)        | 13         |               |          | cast to type                   |
 |            | reinterpret(type) | 13         |               |          | reinterpet as type             |
+|            | =                 | 1          |               | binary   | Assignment                     |
 +------------+-------------------+------------+---------------+----------+--------------------------------+
 ```
 

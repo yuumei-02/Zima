@@ -42,54 +42,60 @@ class Operator(Enum):
    Sub = iota()
    Mul = iota()
    Div = iota()
+   Assign = iota()
    Count = reset()
 
    @staticmethod
    def try_parse_bin_op_token(kind: TokenKind) -> "Operator | None":
-      assert Operator.Count.value == 4
+      assert Operator.Count.value == 5
       match kind:
-         case TokenKind.Plus:  return Operator.Add
-         case TokenKind.Minus: return Operator.Sub
-         case TokenKind.Star:  return Operator.Mul
-         case TokenKind.Slash: return Operator.Div
+         case TokenKind.Plus:   return Operator.Add
+         case TokenKind.Minus:  return Operator.Sub
+         case TokenKind.Star:   return Operator.Mul
+         case TokenKind.Slash:  return Operator.Div
+         case TokenKind.Equals: return Operator.Assign
          case _: return None
 
    def to_str(self) -> str:
-      assert Operator.Count.value == 4
+      assert Operator.Count.value == 5
       match self:
-         case Operator.Add: return "Add"
-         case Operator.Sub: return "Sub"
-         case Operator.Mul: return "Mul"
-         case Operator.Div: return "Div"
+         case Operator.Add:    return "Add"
+         case Operator.Sub:    return "Sub"
+         case Operator.Mul:    return "Mul"
+         case Operator.Div:    return "Div"
+         case Operator.Assign: return "Assign"
          case _:
             panic("unreachable")
 
    def precedence(self) -> int:
-      assert Operator.Count.value == 4
+      assert Operator.Count.value == 5
       match self:
          case Operator.Mul | Operator.Div: return 12
          case Operator.Add | Operator.Sub: return 11
+         case Operator.Assign: return 1
          case _:
             panic("unreachable")
 
    def left_associative(self) -> bool:
-      assert Operator.Count.value == 4
+      assert Operator.Count.value == 5
       match self:
-         case Operator.Add: return True
-         case Operator.Sub: return True
-         case Operator.Mul: return True
-         case Operator.Div: return True
+         case Operator.Add:    return True
+         case Operator.Sub:    return True
+         case Operator.Mul:    return True
+         case Operator.Div:    return True
+         case Operator.Assign: return False
          case _:
             panic("unreachable")
 
    def is_binary(self) -> bool:
-      assert Operator.Count.value == 4
+      assert Operator.Count.value == 5
       match self:
-         case Operator.Mul: return True
-         case Operator.Add: return True
-         case Operator.Sub: return True
-         case Operator.Mul: return True
-         case Operator.Div: return True
+         case Operator.Mul:    return True
+         case Operator.Add:    return True
+         case Operator.Sub:    return True
+         case Operator.Mul:    return True
+         case Operator.Div:    return True
+         case Operator.Assign: return True
          case _:
             panic("unreachable")
 
@@ -220,7 +226,7 @@ class AstNode:
                if scope >= 0:
                   self.append(scope)
 
-            case TokenKind.IntLiteral:
+            case TokenKind.IntLiteral | TokenKind.StrLiteral:
                lexer.undo(token)
                self.append(AstNode.parse_expression(-1, lexer, ast, state))
 

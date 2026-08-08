@@ -28,8 +28,7 @@ class Vec2:
       // self.x = x
       // self.y = y
       var := 1
-      5 * 6
-      var + 4
+      var = 5
 
    def area(self) -> int:
       // area := self.x + self.y

@@ -16,6 +16,7 @@ class TokenKind(Enum):
    RParen = iota()
    Colon  = iota()
    Comma  = iota()
+   Dot    = iota()
    Equals = iota()
    Plus   = iota()
    Minus  = iota()
@@ -39,7 +40,7 @@ class TokenKind(Enum):
    Count  = reset()
 
    def to_str(self) -> str:
-      assert TokenKind.Count.value == 20
+      assert TokenKind.Count.value == 21
       match self:
          case TokenKind.Eof:        return "Eof"
          case TokenKind.NewLine:    return "NewLine"
@@ -47,6 +48,7 @@ class TokenKind(Enum):
          case TokenKind.RParen:     return "RParen"
          case TokenKind.Colon:      return "Colon"
          case TokenKind.Comma:      return "Comma"
+         case TokenKind.Dot:        return "Dot"
          case TokenKind.Equals:     return "Equals"
          case TokenKind.Plus:       return "Plus"
          case TokenKind.Minus:      return "Minus"
@@ -194,6 +196,7 @@ class Lexer:
                   case '=': token.kind = TokenKind.Equals; return token
                   case '(': token.kind = TokenKind.LParen; return token
                   case ')': token.kind = TokenKind.RParen; return token
+                  case '.': token.kind = TokenKind.Dot;    return token
 
                   case '-':
                      if self.can_peek() and self.file_contents[self.z + 1] == '>':
