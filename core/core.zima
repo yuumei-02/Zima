@@ -15,3 +15,6 @@ class int:
 
    def __div__(self, other: int) -> int:
       return self.value / other.value
+
+class str:
+   value: ubit8

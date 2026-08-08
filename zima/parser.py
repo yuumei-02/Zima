@@ -140,16 +140,23 @@ class SymbolType(Symbol):
 
 class ScopeStack:
    scopes: list[dict[str, Symbol]]
+   using_modules: list[ANI]
 
    def __init__(self) -> None:
       self.scopes = []
+      self.using_modules = [0]
 
    def clear(self) -> None:
       self.scopes.clear()
 
-   def search_symbol(self, name: str) -> Symbol | None:
+   def search_symbol(self, ast: "Ast", name: str) -> Symbol | None:
       for scope in reversed(self.scopes):
          search = scope.get(name)
+         if search is not None:
+            return search
+
+      for ani in self.using_modules:
+         search = cast(AstModule, ast.modules[ani]).scope.get(name)
          if search is not None:
             return search
 
@@ -525,7 +532,7 @@ class AstVariable(AstNode):
          state.we_failed()
          return
 
-      type_symbol: Symbol | None = ast.scope_stack.search_symbol(self.type.str_literal)
+      type_symbol: Symbol | None = ast.scope_stack.search_symbol(ast, self.type.str_literal)
       if type_symbol is None:
          reporter.type_does_not_exist(path, self.type)
          state.we_failed()
@@ -613,7 +620,7 @@ class AstParameter(AstNode):
       else:
          type_name = self.type.str_literal
 
-      type_symbol = ast.scope_stack.search_symbol(type_name)
+      type_symbol = ast.scope_stack.search_symbol(ast, type_name)
       if type_symbol is None:
          if isinstance(self.type, Token):
             reporter.type_does_not_exist(path, self.type)
@@ -714,7 +721,7 @@ class AstClass(AstNode):
             state.we_failed()
             continue
 
-         field_symbol = ast.scope_stack.search_symbol(field_type_name.str_literal)
+         field_symbol = ast.scope_stack.search_symbol(ast, field_type_name.str_literal)
          if field_symbol is None:
             reporter.type_does_not_exist(path, field_type_name)
             state.we_failed()
@@ -1085,14 +1092,6 @@ class Parser:
    def parse_file(file_path: str, core_path: str) -> Ast | None:
       ast = Ast()
       state = ParsingState()
-      module = AstModule.parse(file_path, ast, state)
-      if module is None:
-         print(f"[ERROR] File \"{file_path}\" either doesn't exist or is not a file.", file=sys.stderr)
-         exit()
-
-      ast.modules.append(module)
-      if state.failure:
-         return None
 
       core = AstModule.parse(core_path, ast, state)
       if core is None:
@@ -1102,4 +1101,13 @@ class Parser:
       ast.modules.append(core)
       if state.failure:
          panic("unreachable")
+
+      module = AstModule.parse(file_path, ast, state)
+      if module is None:
+         print(f"[ERROR] File \"{file_path}\" either doesn't exist or is not a file.", file=sys.stderr)
+         exit()
+
+      ast.modules.append(module)
+      if state.failure:
+         return None
       return ast
