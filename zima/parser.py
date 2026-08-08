@@ -258,6 +258,9 @@ class AstNodeKind(Enum):
 class AstNode:
    kind: AstNodeKind
 
+   def collect(self, ast: "Ast") -> None:
+      panic("unreachable")
+
    @staticmethod
    def parse_atom(lexer: Lexer, ast: "Ast", state: ParsingState) -> ANI:
       token: Token = lexer.next()
@@ -388,6 +391,9 @@ class AstBinOp(AstNode):
       self.lhs = lhs
       self.rhs = rhs
 
+   def collect(self, ast: "Ast") -> None:
+      pass
+
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
       print(f"{prefix}{TreePrinter.bool_to_connector(last)}{self.operator.to_str()}")
       prefix += TreePrinter.last_to_prefix_append(last)
@@ -403,6 +409,9 @@ class AstProcedureCall(AstNode):
       self.kind = AstNodeKind.ProcedureCall
       self.procedure = procedure
       self.parameters = []
+
+   def collect(self, ast: "Ast") -> None:
+      pass
 
    # Expects that the procedure name and the LParen part of the procedure call syntax has already been parsed.
    @staticmethod
@@ -441,6 +450,9 @@ class AstIdentifier(AstNode):
       self.kind = AstNodeKind.Identifier
       self.value = value
 
+   def collect(self, ast: "Ast") -> None:
+      pass
+
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
       print(f"{prefix}{TreePrinter.bool_to_connector(last)}{self.value.str_literal}")
 
@@ -451,6 +463,9 @@ class AstStrLiteral(AstNode):
       assert value.kind == TokenKind.StrLiteral
       self.kind = AstNodeKind.StrLiteral
       self.value = value
+
+   def collect(self, ast: "Ast") -> None:
+      pass
 
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
       print(f"{prefix}{TreePrinter.bool_to_connector(last)}{self.value.str_literal}")
@@ -463,6 +478,9 @@ class AstIntLiteral(AstNode):
       self.kind = AstNodeKind.IntLiteral
       self.value = value
 
+   def collect(self, ast: "Ast") -> None:
+      pass
+
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
       print(f"{prefix}{TreePrinter.bool_to_connector(last)}{self.value.int_literal}")
 
@@ -471,6 +489,11 @@ class AstVariable(AstNode):
    name: Token
    type: Token | str | None # Explicit type | inferred type | implicit type before inference
    expression: ANI
+   mutable: bool
+
+   def collect(self, ast: "Ast") -> None:
+      # Todo: Actually set the type of the variable.
+      ast.scope_stack[len(ast.scope_stack) - 1][self.name.str_literal] = SymbolVariable(0, self.mutable)
 
    # Expects that the name and type colon part of the variable declaration syntax has already been parsed
    @staticmethod
@@ -478,7 +501,7 @@ class AstVariable(AstNode):
       self = AstVariable()
       self.name = name
       self.expression = -1
-      mutable = False
+      self.mutable = False
 
       token: Token = lexer.next()
       match token.kind:
@@ -489,7 +512,7 @@ class AstVariable(AstNode):
                case TokenKind.NewLine: pass
                case TokenKind.Equals | TokenKind.Colon:
                   self.expression = AstNode.parse_expression(-1, lexer, ast, state)
-                  mutable = token.kind == TokenKind.Equals
+                  self.mutable = token.kind == TokenKind.Equals
 
                case _:
                   state.enter_panic()
@@ -497,7 +520,7 @@ class AstVariable(AstNode):
                   return -1
 
          case TokenKind.Equals | TokenKind.Colon:
-            mutable = token.kind == TokenKind.Equals
+            self.mutable = token.kind == TokenKind.Equals
             self.type = None
             self.expression = AstNode.parse_expression(-1, lexer, ast, state)
 
@@ -506,7 +529,6 @@ class AstVariable(AstNode):
             reporter.unexpected_token(lexer.file_path, token, [TokenKind.Identifier, TokenKind.Equals])
             return -1
 
-      ast.scope_stack[len(ast.scope_stack) - 1][self.name.str_literal] = SymbolVariable(0, mutable)
       ast.nodes.append(self)
       return len(ast.nodes) - 1
 
@@ -526,6 +548,9 @@ class AstReturn(AstNode):
       self.expression = expression
       self.kind = AstNodeKind.Return
 
+   def collect(self, ast: "Ast") -> None:
+      ast.nodes[self.expression].collect(ast)
+
    @staticmethod
    def parse(lexer: Lexer, ast: "Ast", state: ParsingState) -> ANI:
       self = AstReturn(AstNode.parse_expression(-1, lexer, ast, state))
@@ -541,6 +566,10 @@ class AstReturn(AstNode):
 class AstParameter(AstNode):
    name: Token
    type: Token | None # Type | Inferred Self type
+
+   def collect(self, ast: "Ast") -> None:
+      # Todo: Actually set the type of the parameter.
+      ast.scope_stack[len(ast.scope_stack) - 1][self.name.str_literal] = SymbolVariable(0, True)
 
    def __init__(self, name: Token, type: Token | None) -> None:
       self.name = name
@@ -559,11 +588,16 @@ class AstScope(AstNode):
    body: list[ANI]
    scope: dict[str, Symbol]
 
+   def collect(self, ast: "Ast") -> None:
+      ast.scope_stack.append(self.scope)
+      for ani in self.body:
+         ast.nodes[ani].collect(ast)
+      ast.scope_stack.pop()
+
    @staticmethod
    def parse(current_indent: int, lexer: Lexer, ast: "Ast", state: ParsingState) -> ANI:
       self = AstScope()
       self.scope = {}
-      ast.scope_stack.append(self.scope)
       token: Token = lexer.next()
 
       match token.kind:
@@ -573,7 +607,6 @@ class AstScope(AstNode):
             if token.kind != TokenKind.Colon:
                state.enter_panic()
                reporter.unexpected_token(lexer.file_path, token, [TokenKind.Colon])
-               ast.scope_stack.pop()
                return -1
 
             self.body = AstNode.parse_code_block(current_indent, lexer, ast, state)
@@ -585,10 +618,8 @@ class AstScope(AstNode):
          case _:
             state.enter_panic()
             reporter.unexpected_token(lexer.file_path, token, [TokenKind.StrLiteral, TokenKind.Colon])
-            ast.scope_stack.pop()
             return -1
 
-      ast.scope_stack.pop()
       ast.nodes.append(self)
       return len(ast.nodes) - 1
 
@@ -617,6 +648,16 @@ class AstClass(AstNode):
    methods: list[ANI]
    scope: dict[str, Symbol]
 
+   def collect(self, ast: "Ast") -> None:
+      ast.scope_stack.append(self.scope)
+      for ani in self.fields:
+         ast.nodes[ani].collect(ast)
+      for ani in self.methods:
+         ast.nodes[ani].collect(ast)
+      ast.scope_stack.pop()
+      # Todo: Actually set the type of the class.
+      ast.scope_stack[len(ast.scope_stack) - 1][self.name.str_literal] = SymbolType(0)
+
    @staticmethod
    def parse(current_indent: int, lexer: Lexer, ast: "Ast", state: ParsingState) -> ANI:
       self = AstClass()
@@ -641,7 +682,6 @@ class AstClass(AstNode):
          lexer.next()
          token = lexer.peek()
       indent_level: int = token.indent
-      ast.scope_stack.append(self.scope)
 
       while True:
          token = lexer.next()
@@ -665,10 +705,7 @@ class AstClass(AstNode):
                if state.panic: continue
                field_type: Token = lexer.next_and_expect(state, [TokenKind.Identifier])
                if state.panic: continue
-               param = AstParameter(token, field_type)
-               ast.nodes.append(param)
-               # Todo: Actually set the type of the parameter
-               self.scope[param.name.str_literal] = SymbolVariable(0, True)
+               ast.nodes.append(AstParameter(token, field_type))
                self.fields.append(len(ast.nodes) - 1)
 
             case TokenKind.Def:
@@ -680,12 +717,8 @@ class AstClass(AstNode):
                if not state.panic:
                   state.enter_panic()
                   reporter.unexpected_token(lexer.file_path, token, [])
-               ast.scope_stack.pop()
                return -1
 
-      ast.scope_stack.pop()
-      # Todo: Actually set the type of the class
-      ast.scope_stack[len(ast.scope_stack) - 1][self.name.str_literal] = SymbolType(0)
       ast.nodes.append(self)
       return len(ast.nodes) - 1
 
@@ -722,6 +755,16 @@ class AstProcedure(AstNode):
       self.body = []
       self.scope = {}
 
+   def collect(self, ast: "Ast") -> None:
+      ast.scope_stack.append(self.scope)
+      for ani in self.parameter_types:
+         ast.nodes[ani].collect(ast)
+      for ani in self.body:
+         ast.nodes[ani].collect(ast)
+      ast.scope_stack.pop()
+      # Todo: Actually set the type of the procedure.
+      ast.scope_stack[len(ast.scope_stack) - 1][self.name.str_literal] = SymbolProcedure(0)
+
    @staticmethod
    def parse(current_indent: int, lexer: Lexer, ast: "Ast", state: ParsingState, in_class: bool = False) -> ANI:
       self = AstProcedure(lexer.next())
@@ -736,7 +779,6 @@ class AstProcedure(AstNode):
          reporter.unexpected_token(lexer.file_path, token, [TokenKind.LParen])
          return -1
 
-      ast.scope_stack.append(self.scope)
       expected: list[TokenKind] = [TokenKind.Identifier, TokenKind.RParen]
 
       # False is for the parameter name
@@ -755,7 +797,6 @@ class AstProcedure(AstNode):
          if not expected.__contains__(token.kind):
             state.enter_panic()
             reporter.unexpected_token(lexer.file_path, token, expected)
-            ast.scope_stack.pop()
             return -1
 
          match token.kind:
@@ -807,9 +848,6 @@ class AstProcedure(AstNode):
             case _:
                panic("unreachable")
 
-      ast.scope_stack.pop()
-      # Todo: Actually set the type of the procedure
-      ast.scope_stack[len(ast.scope_stack) - 1][self.name.str_literal] = SymbolProcedure(0)
       ast.nodes.append(self)
       return len(ast.nodes) - 1
 
@@ -849,6 +887,14 @@ class AstModule(AstNode):
       self.types = []
       self.scope = {}
 
+   def collect(self, ast: "Ast") -> None:
+      ast.scope_stack.append(self.scope)
+      for ani in self.procedures:
+         ast.nodes[ani].collect(ast)
+      for ani in self.types:
+         ast.nodes[ani].collect(ast)
+      ast.scope_stack.pop()
+
    # May return [None] when [file_path] does not exist or is not a file.
    @staticmethod
    def parse(file_path: str, ast: "Ast") -> "AstModule | None":
@@ -859,7 +905,6 @@ class AstModule(AstNode):
       lexer = Lexer(file_path)
       state = ParsingState()
       self = AstModule(Path(file_path).stem)
-      ast.scope_stack.append(self.scope)
 
       while True:
          token: Token = lexer.next()
@@ -884,7 +929,6 @@ class AstModule(AstNode):
                state.enter_panic()
                reporter.unexpected_token(file_path, token, [])
 
-      ast.scope_stack.pop()
       return self
 
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
@@ -939,6 +983,12 @@ class Ast:
          "sbit32": SymbolType(6),
          "sbit64": SymbolType(7)
       }
+
+   def collect_symbols_and_types(self) -> None:
+      self.scope_stack.clear()
+      self.scope_stack.append(self.scope)
+      for module in self.modules:
+         module.collect(self)
 
    def dump(self) -> None:
       print(".")

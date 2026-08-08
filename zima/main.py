@@ -19,7 +19,9 @@ def compile_program(file: str, flags: CompileFlags) -> None:
       token_dump(file)
       return
 
+   # Todo: Early out on parsing failure
    ast: Ast = Parser.parse_file(file)
+   ast.collect_symbols_and_types()
    if flags.ast_dump:
       ast.dump()
       return
