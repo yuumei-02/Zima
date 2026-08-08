@@ -19,7 +19,7 @@ def compile_program(file: str, flags: CompileFlags) -> bool:
       token_dump(file)
       return False
 
-   ast: Ast | None = Parser.parse_file(file)
+   ast: Ast | None = Parser.parse_file(file, flags.core_path)
    if ast is None:
       return True
 
@@ -44,7 +44,11 @@ def main() -> None:
       match args[i + 1]:
          case "--token-dump": flags.token_dump = True
          case "--ast-dump":   flags.ast_dump = True
-         case _:              files.append(args[i + 1])
+         case _:
+            if args[i + 1].startswith("--core-path="):
+               flags.core_path = args[i + 1].removeprefix("--core-path=")
+            else:
+               files.append(args[i + 1])
 
    for file in files:
       if compile_program(file, flags):

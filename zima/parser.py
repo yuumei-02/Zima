@@ -725,8 +725,10 @@ class AstClass(AstNode):
       ast.types.append(TypeClass(field_types))
       ast.scope_stack.add_symbol(self.name.str_literal, SymbolType(len(ast.types) - 1))
 
+      ast.scope_stack.push_scope(self.scope)
       for ani in self.methods:
          ast.nodes[ani].collect(path, ast, state)
+      ast.scope_stack.pop_scope()
 
    @staticmethod
    def parse(current_indent: int, lexer: Lexer, ast: "Ast", state: ParsingState) -> ANI:
@@ -1080,7 +1082,7 @@ class Ast:
 
 class Parser:
    @staticmethod
-   def parse_file(file_path: str) -> Ast | None:
+   def parse_file(file_path: str, core_path: str) -> Ast | None:
       ast = Ast()
       state = ParsingState()
       module = AstModule.parse(file_path, ast, state)
@@ -1091,4 +1093,13 @@ class Parser:
       ast.modules.append(module)
       if state.failure:
          return None
+
+      core = AstModule.parse(core_path, ast, state)
+      if core is None:
+         print(f"[ERROR] Couldn't find the core library at path \"{core_path}\".", file=sys.stderr)
+         exit()
+
+      ast.modules.append(core)
+      if state.failure:
+         panic("unreachable")
       return ast
