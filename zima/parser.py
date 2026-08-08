@@ -253,6 +253,7 @@ class AstBinOp(AstNode):
    rhs: ANI
 
    def __init__(self, operator: Operator, lhs: ANI, rhs: ANI) -> None:
+      self.kind = AstNodeKind.BinOp
       self.operator = operator
       self.lhs = lhs
       self.rhs = rhs
@@ -269,6 +270,7 @@ class AstProcedureCall(AstNode):
 
    def __init__(self, procedure: Token) -> None:
       assert procedure.kind == TokenKind.Identifier
+      self.kind = AstNodeKind.ProcedureCall
       self.procedure = procedure
       self.parameters = []
 
@@ -306,6 +308,7 @@ class AstIdentifier(AstNode):
 
    def __init__(self, value: Token) -> None:
       assert value.kind == TokenKind.Identifier
+      self.kind = AstNodeKind.Identifier
       self.value = value
 
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
@@ -316,6 +319,7 @@ class AstStrLiteral(AstNode):
 
    def __init__(self, value: Token) -> None:
       assert value.kind == TokenKind.StrLiteral
+      self.kind = AstNodeKind.StrLiteral
       self.value = value
 
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
@@ -326,12 +330,14 @@ class AstIntLiteral(AstNode):
 
    def __init__(self, value: Token) -> None:
       assert value.kind == TokenKind.IntLiteral
+      self.kind = AstNodeKind.IntLiteral
       self.value = value
 
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
       print(f"{prefix}{TreePrinter.bool_to_connector(last)}{self.value.int_literal}")
 
 class AstVariable(AstNode):
+   kind: AstNodeKind = AstNodeKind.Variable
    name: Token
    type: Token | str | None # Explicit type | inferred type | implicit type before inference
    expression: ANI
@@ -384,6 +390,7 @@ class AstReturn(AstNode):
 
    def __init__(self, expression: ANI) -> None:
       self.expression = expression
+      self.kind = AstNodeKind.Return
 
    @staticmethod
    def parse(lexer: Lexer, ast: "Ast", state: ParsingState) -> ANI:
@@ -404,6 +411,7 @@ class AstParameter(AstNode):
    def __init__(self, name: Token, type: Token | None) -> None:
       self.name = name
       self.type = type
+      self.kind = AstNodeKind.Parameter
 
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
       if self.type is None:
@@ -412,6 +420,7 @@ class AstParameter(AstNode):
          print(f"{prefix}{TreePrinter.bool_to_connector(last)}{self.name.str_literal}: {self.type.str_literal}")
 
 class AstScope(AstNode):
+   kind: AstNodeKind = AstNodeKind.Scope
    name: Token | None
    body: list[ANI]
 
@@ -453,6 +462,7 @@ class AstScope(AstNode):
          ast.nodes[ani].display(ast, prefix, i + 1 >= len(self.body))
 
 class AstClass(AstNode):
+   kind: AstNodeKind = AstNodeKind.Class
    name: Token
    fields: list[ANI]
    methods: list[ANI]
@@ -543,6 +553,7 @@ class AstProcedure(AstNode):
       self.parameter_types = []
       self.return_types = []
       self.body = []
+      self.kind = AstNodeKind.Procedure
 
    @staticmethod
    def parse(current_indent: int, lexer: Lexer, ast: "Ast", state: ParsingState, in_class: bool = False) -> ANI:
@@ -652,6 +663,7 @@ class AstModule(AstNode):
       self.name = name
       self.procedures = []
       self.types = []
+      self.kind = AstNodeKind.Module
 
    # May return [None] when [file_path] does not exist or is not a file.
    @staticmethod
@@ -703,19 +715,123 @@ class AstModule(AstNode):
       for i, ani in enumerate(self.procedures):
          ast.nodes[ani].display(ast, new_prefix, i + 1 >= len(self.procedures))
 
+class TypeKind(Enum):
+   Bit8 = iota()
+   Bit16 = iota()
+   Bit32 = iota()
+   Bit64 = iota()
+   Class = iota()
+   Procedure = iota()
+   Pointer = iota()
+   Count = reset()
+
+TypeId: TypeAlias = int
+
+class Type:
+   kind: TypeKind
+
+   def display(self, ast: "Ast", prefix: str, last: bool) -> None:
+      assert False, "Missing implementation for procedure display in one of the Type subclasses."
+
+class TypeBit(Type):
+   signed: bool
+
+   def __init__(self, kind: TypeKind, signed: bool) -> None:
+      self.kind = kind
+      self.signed = signed
+
+   def display(self, ast: "Ast", prefix: str, last: bool) -> None:
+      print(f"{prefix}{TreePrinter.bool_to_connector(last)}", end="")
+      match self.kind:
+         case TypeKind.Bit8:  print(f"Bit8 (signed={self.signed})");
+         case TypeKind.Bit16: print(f"Bit16 (signed={self.signed})");
+         case TypeKind.Bit32: print(f"Bit32 (signed={self.signed})");
+         case TypeKind.Bit64: print(f"Bit64 (signed={self.signed})");
+         case _:
+            panic("unreachable")
+
+
+class TypeClass(Type):
+   kind = TypeKind.Class
+   fields: list[TypeId]
+
+   def __init__(self, fields: list[TypeId]) -> None:
+      self.fields = fields
+
+   def display(self, ast: "Ast", prefix: str, last: bool) -> None:
+      print(f"{prefix}{TreePrinter.bool_to_connector(last)}Class")
+      prefix += TreePrinter.last_to_prefix_append(last)
+      for i, ani in enumerate(self.fields):
+         ast.nodes[ani].display(ast, prefix, i + 1 >= len(self.fields))
+
+class TypeProcedure(Type):
+   kind = TypeKind.Procedure
+   parameters: list[TypeId]
+   returns: tuple[TypeId, TypeId]
+
+   def __init__(self, parameters: list[TypeId], returns: tuple[TypeId, TypeId]) -> None:
+      self.parameters = parameters
+      self.returns = returns
+
+   def display(self, ast: "Ast", prefix: str, last: bool) -> None:
+      print(f"{prefix}{TreePrinter.bool_to_connector(last)}Class")
+      prefix += TreePrinter.last_to_prefix_append(last)
+
+      print(f"{prefix}├─Parameters")
+      new_prefix: str = prefix + TreePrinter.last_to_prefix_append(False)
+      for i, type_id in enumerate(self.parameters):
+         ast.types[type_id].display(ast, new_prefix, i + 1 >= len(self.parameters))
+
+      print(f"{prefix}└─Returns")
+      new_prefix = prefix + TreePrinter.last_to_prefix_append(True)
+      if self.returns[0] > 0:
+         ast.types[self.returns[0]].display(ast, new_prefix, self.returns[1] < 0)
+      if self.returns[1] > 0:
+         ast.types[self.returns[1]].display(ast, new_prefix, True)
+
+class TypePointer(Type):
+   kind = TypeKind.Pointer
+   pointee: TypeId
+
+   def __init__(self, pointee: TypeId) -> None:
+      self.pointee = pointee
+
+   def display(self, ast: "Ast", prefix: str, last: bool) -> None:
+      print(f"{prefix}{TreePrinter.bool_to_connector(last)}Pointer")
+      prefix += TreePrinter.last_to_prefix_append(last)
+      ast.types[self.pointee].display(ast, prefix, True)
+
 class Ast:
    modules: list[AstNode]
    nodes: list[AstNode]
+   types: list[Type]
 
    def __init__(self) -> None:
       self.modules = []
       self.nodes = []
+      self.types = [
+         TypeBit(TypeKind.Bit8, False),
+         TypeBit(TypeKind.Bit16, False),
+         TypeBit(TypeKind.Bit32, False),
+         TypeBit(TypeKind.Bit64, False),
+
+         TypeBit(TypeKind.Bit8, True),
+         TypeBit(TypeKind.Bit16, True),
+         TypeBit(TypeKind.Bit32, True),
+         TypeBit(TypeKind.Bit64, True),
+      ]
 
    def dump(self) -> None:
       print(".")
+      print(f"├─TypeTable")
+      prefix: str = TreePrinter.last_to_prefix_append(False)
+      for i, t in enumerate(self.types):
+         t.display(self, prefix, i + 1 >= len(self.types))
+
+      print(f"└─Modules")
+      prefix = TreePrinter.last_to_prefix_append(True)
       for i, module in enumerate(self.modules):
-         current_is_last: bool = i + 1 >= len(self.modules)
-         module.display(self, "", current_is_last)
+         module.display(self, prefix, i + 1 >= len(self.modules))
 
 class Parser:
    @staticmethod

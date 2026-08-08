@@ -1,0 +1,17 @@
+// Copyright (c) 2026 yuumei-02. All Rights Reserved.
+// See the LICENSE file for more information.
+
+class int:
+   value: Bit32
+
+   def __add__(self, other: int) -> int:
+      return self.value + other.value
+
+   def __sub__(self, other: int) -> int:
+      return self.value - other.value
+
+   def __mul__(self, other: int) -> int:
+      return self.value * other.value
+
+   def __div__(self, other: int) -> int:
+      return self.value / other.value
