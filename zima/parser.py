@@ -380,17 +380,19 @@ class AstReturn(AstNode):
       if self.expression >= 0:
          ast.nodes[self.expression].display(ast, prefix, True)
 
-# Todo: Allow type to be inferred in the case of the self parameter in class methods
 class AstParameter(AstNode):
    name: Token
-   type: Token
+   type: Token | None # Type | Inferred Self type
 
-   def __init__(self, name: Token, type: Token) -> None:
+   def __init__(self, name: Token, type: Token | None) -> None:
       self.name = name
       self.type = type
 
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
-      print(f"{prefix}{TreePrinter.bool_to_connector(last)}{self.name.str_literal}: {self.type.str_literal}")
+      if self.type is None:
+         print(f"{prefix}{TreePrinter.bool_to_connector(last)}{self.name.str_literal}: Self")
+      else:
+         print(f"{prefix}{TreePrinter.bool_to_connector(last)}{self.name.str_literal}: {self.type.str_literal}")
 
 class AstScope(AstNode):
    name: Token | None
@@ -436,12 +438,14 @@ class AstScope(AstNode):
 class AstClass(AstNode):
    name: Token
    fields: list[ANI]
+   methods: list[ANI]
 
    @staticmethod
    def parse(current_indent: int, lexer: Lexer, ast: "Ast", state: ParsingState) -> ANI:
       self = AstClass()
       self.name = lexer.next()
       self.fields = []
+      self.methods = []
 
       if self.name.kind != TokenKind.Identifier:
          state.enter_panic()
@@ -485,6 +489,11 @@ class AstClass(AstNode):
                ast.nodes.append(AstParameter(token, field_type))
                self.fields.append(len(ast.nodes) - 1)
 
+            case TokenKind.Def:
+               proc: ANI = AstProcedure.parse(token.indent, lexer, ast, state, in_class=True)
+               if proc >= 0:
+                  self.methods.append(proc)
+
             case _:
                if not state.panic:
                   state.enter_panic()
@@ -497,25 +506,30 @@ class AstClass(AstNode):
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
       print(f"{prefix}{TreePrinter.bool_to_connector(last)}Class: {self.name.str_literal}")
       prefix += TreePrinter.last_to_prefix_append(last)
+      print(f"{prefix}{TreePrinter.bool_to_connector(False)}Fields")
+      new_prefix: str = prefix + TreePrinter.last_to_prefix_append(False)
       for i, ani in enumerate(self.fields):
-         ast.nodes[ani].display(ast, prefix, i + 1 >= len(self.fields))
+         ast.nodes[ani].display(ast, new_prefix, i + 1 >= len(self.fields))
+      print(f"{prefix}{TreePrinter.bool_to_connector(True)}Methods")
+      new_prefix = prefix + TreePrinter.last_to_prefix_append(True)
+      for i, ani in enumerate(self.methods):
+         ast.nodes[ani].display(ast, new_prefix, i + 1 >= len(self.methods))
 
 class AstProcedure(AstNode):
    name: Token
    parameter_types: list[ANI]
-   return_types: tuple[ANI, ANI]
+   return_types: list[Token]
    body: list[ANI]
 
    def __init__(self, name: Token) -> None:
       self.name = name
       self.parameter_types = []
-      self.return_types = (-1, -1)
+      self.return_types = []
       self.body = []
 
    @staticmethod
-   def parse(lexer: Lexer, ast: "Ast", state: ParsingState) -> ANI:
+   def parse(current_indent: int, lexer: Lexer, ast: "Ast", state: ParsingState, in_class: bool = False) -> ANI:
       self = AstProcedure(lexer.next())
-      current_indent: int = self.name.indent
       if self.name.kind != TokenKind.Identifier:
          state.enter_panic()
          reporter.unexpected_token(lexer.file_path, self.name, [TokenKind.Identifier])
@@ -553,6 +567,11 @@ class AstProcedure(AstNode):
                   case TriBool.false:
                      parameter_name = token
                      expected = [TokenKind.Colon]
+                     if in_class and parameter_name.str_literal == "self":
+                        self.parameter_types.append(len(ast.nodes))
+                        ast.nodes.append(AstParameter(parameter_name, None))
+                        expected = [TokenKind.Comma, TokenKind.RParen]
+                        identifier_as_type = TriBool.neutral
 
                   case TriBool.true:
                      self.parameter_types.append(len(ast.nodes))
@@ -560,6 +579,7 @@ class AstProcedure(AstNode):
                      expected = [TokenKind.Comma, TokenKind.RParen]
 
                   case TriBool.neutral:
+                     self.return_types.append(token)
                      expected = [TokenKind.Colon]
 
             case TokenKind.RParen:
@@ -597,9 +617,9 @@ class AstProcedure(AstNode):
 
       print(f"{prefix}├─Returns")
       new_prefix = prefix + TreePrinter.last_to_prefix_append(False)
-      for i, ani in enumerate(self.return_types):
-         if ani >= 0:
-            ast.nodes[ani].display(ast, new_prefix, i + 1 > len(self.return_types))
+      for i, token in enumerate(self.return_types):
+         current_is_last: bool = i + 1 >= len(self.return_types)
+         print(f"{new_prefix}{TreePrinter.bool_to_connector(current_is_last)}{token.str_literal}")
 
       print(f"{prefix}└─Body")
       new_prefix = prefix + TreePrinter.last_to_prefix_append(True)
@@ -632,7 +652,7 @@ class AstModule(AstNode):
          match token.kind:
             case TokenKind.Def:
                state.exit_panic()
-               proc: ANI = AstProcedure.parse(lexer, ast, state)
+               proc: ANI = AstProcedure.parse(token.indent, lexer, ast, state)
                if proc >= 0:
                   self.procedures.append(proc)
 
