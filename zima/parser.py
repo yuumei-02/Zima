@@ -220,6 +220,10 @@ class AstNode:
                if scope >= 0:
                   self.append(scope)
 
+            case TokenKind.IntLiteral:
+               lexer.undo(token)
+               self.append(AstNode.parse_expression(-1, lexer, ast, state))
+
             case TokenKind.Pass:
                state.exit_panic()
 
