@@ -43,52 +43,57 @@ class Operator(Enum):
    Mul = iota()
    Div = iota()
    Assign = iota()
+   Access = iota()
    Count = reset()
 
    @staticmethod
    def try_parse_bin_op_token(kind: TokenKind) -> "Operator | None":
-      assert Operator.Count.value == 5
+      assert Operator.Count.value == 6
       match kind:
          case TokenKind.Plus:   return Operator.Add
          case TokenKind.Minus:  return Operator.Sub
          case TokenKind.Star:   return Operator.Mul
          case TokenKind.Slash:  return Operator.Div
          case TokenKind.Equals: return Operator.Assign
+         case TokenKind.Dot:    return Operator.Access
          case _: return None
 
    def to_str(self) -> str:
-      assert Operator.Count.value == 5
+      assert Operator.Count.value == 6
       match self:
          case Operator.Add:    return "Add"
          case Operator.Sub:    return "Sub"
          case Operator.Mul:    return "Mul"
          case Operator.Div:    return "Div"
          case Operator.Assign: return "Assign"
+         case Operator.Access: return "Access"
          case _:
             panic("unreachable")
 
    def precedence(self) -> int:
-      assert Operator.Count.value == 5
+      assert Operator.Count.value == 6
       match self:
+         case Operator.Access:             return 14
          case Operator.Mul | Operator.Div: return 12
          case Operator.Add | Operator.Sub: return 11
-         case Operator.Assign: return 1
+         case Operator.Assign:             return 1
          case _:
             panic("unreachable")
 
    def left_associative(self) -> bool:
-      assert Operator.Count.value == 5
+      assert Operator.Count.value == 6
       match self:
          case Operator.Add:    return True
          case Operator.Sub:    return True
          case Operator.Mul:    return True
          case Operator.Div:    return True
          case Operator.Assign: return False
+         case Operator.Access: return True
          case _:
             panic("unreachable")
 
    def is_binary(self) -> bool:
-      assert Operator.Count.value == 5
+      assert Operator.Count.value == 6
       match self:
          case Operator.Mul:    return True
          case Operator.Add:    return True
@@ -96,6 +101,7 @@ class Operator(Enum):
          case Operator.Mul:    return True
          case Operator.Div:    return True
          case Operator.Assign: return True
+         case Operator.Access: return True
          case _:
             panic("unreachable")
 
@@ -335,6 +341,7 @@ class AstVariable(AstNode):
    def parse(name: Token, lexer: Lexer, ast: "Ast", state: ParsingState) -> ANI:
       self = AstVariable()
       self.name = name
+      self.expression = -1
 
       token: Token = lexer.next()
       match token.kind:

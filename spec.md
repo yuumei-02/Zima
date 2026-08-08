@@ -39,11 +39,13 @@ Atoms on their own are expressions but can also be combined using operators to c
 |            | ^                 | 6          |               |          | xor                            |
 |            | |                 | 5          |               |          | or                             |
 +------------+-------------------+------------+---------------+----------+--------------------------------+
+| Object     | .                 | 14         | left to right | binary   | Member access                  |
+|            | =                 | 1          | right to left |          | Assignment                     |
++------------+-------------------+------------+---------------+----------+--------------------------------+
 | Misc       | &                 | 13         | right to left | unary    | address of                     |
 |            | sizeof(type)      | 13         |               |          | size of type                   |
 |            | cast(type)        | 13         |               |          | cast to type                   |
 |            | reinterpret(type) | 13         |               |          | reinterpet as type             |
-|            | =                 | 1          |               | binary   | Assignment                     |
 +------------+-------------------+------------+---------------+----------+--------------------------------+
 ```
 
