@@ -750,7 +750,6 @@ class TypeBit(Type):
          case _:
             panic("unreachable")
 
-
 class TypeClass(Type):
    kind = TypeKind.Class
    fields: list[TypeId]
@@ -801,10 +800,55 @@ class TypePointer(Type):
       prefix += TreePrinter.last_to_prefix_append(last)
       ast.types[self.pointee].display(ast, prefix, True)
 
+class SymbolKind(Enum):
+   Variable = iota()
+   Procedure = iota()
+   Type = iota()
+   Count = reset()
+
+class Symbol:
+   kind: SymbolKind
+   type: TypeId
+
+   def display(self, name: str, ast: "Ast", prefix: str, last: bool) -> None:
+      assert False, "Missing implementation for procedure display in one of the Symbol subclasses."
+
+class SymbolVariable(Symbol):
+   kind = SymbolKind.Variable
+   mutable: bool
+
+   def __init__(self, type: TypeId, mutable: bool) -> None:
+      self.type = type
+      self.mutable = mutable
+
+   def display(self, name: str, ast: "Ast", prefix: str, last: bool) -> None:
+      print(f"{prefix}{TreePrinter.bool_to_connector(last)}{name}: Variable -> {self.type}")
+      prefix += TreePrinter.last_to_prefix_append(last)
+      print(f"{prefix}└─Mutable: {self.mutable}")
+
+class SymbolProcedure(Symbol):
+   kind = SymbolKind.Procedure
+
+   def __init__(self, type: TypeId) -> None:
+      self.type = type
+
+   def display(self, name: str, ast: "Ast", prefix: str, last: bool) -> None:
+      print(f"{prefix}{TreePrinter.bool_to_connector(last)}{name}: Procedure -> {self.type}")
+
+class SymbolType(Symbol):
+   kind = SymbolKind.Type
+
+   def __init__(self, type: TypeId) -> None:
+      self.type = type
+
+   def display(self, name: str, ast: "Ast", prefix: str, last: bool) -> None:
+      print(f"{prefix}{TreePrinter.bool_to_connector(last)}{name}: Type -> {self.type}")
+
 class Ast:
    modules: list[AstNode]
    nodes: list[AstNode]
    types: list[Type]
+   scope: dict[str, Symbol]
 
    def __init__(self) -> None:
       self.modules = []
@@ -821,12 +865,28 @@ class Ast:
          TypeBit(TypeKind.Bit64, True),
       ]
 
+      self.scope = {
+         "ubit8": SymbolType(0),
+         "ubit16": SymbolType(1),
+         "ubit32": SymbolType(2),
+         "ubit64": SymbolType(3),
+
+         "sbit8": SymbolType(4),
+         "sbit16": SymbolType(5),
+         "sbit32": SymbolType(6),
+         "sbit64": SymbolType(7)
+      }
+
    def dump(self) -> None:
       print(".")
       print(f"├─TypeTable")
       prefix: str = TreePrinter.last_to_prefix_append(False)
       for i, t in enumerate(self.types):
          t.display(self, prefix, i + 1 >= len(self.types))
+
+      print(f"├─Scope")
+      for i, (name, symbol) in enumerate(self.scope.items()):
+         symbol.display(name, self, prefix, i + 1 >= len(self.scope.items()))
 
       print(f"└─Modules")
       prefix = TreePrinter.last_to_prefix_append(True)
