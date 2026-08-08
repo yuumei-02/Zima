@@ -138,6 +138,31 @@ class SymbolType(Symbol):
    def display(self, name: str, ast: "Ast", prefix: str, last: bool) -> None:
       print(f"{prefix}{TreePrinter.bool_to_connector(last)}{name}: Type -> {self.type}")
 
+class ScopeStack:
+   scopes: list[dict[str, Symbol]]
+
+   def __init__(self) -> None:
+      self.scopes = []
+
+   def clear(self) -> None:
+      self.scopes.clear()
+
+   def search_symbol(self, name: str) -> Symbol | None:
+      for scope in reversed(self.scopes):
+         search = scope.get(name)
+         if search is not None:
+            return search
+
+      return None
+
+   def add_symbol(self, name: str, symbol: Symbol) -> None:
+      self.scopes[len(self.scopes) - 1][name] = symbol
+
+   def push_scope(self, scope: dict[str, Symbol]) -> None:
+      self.scopes.append(scope)
+
+   def pop_scope(self) -> None:
+      self.scopes.pop()
 
 class TreePrinter:
    @staticmethod
@@ -493,7 +518,7 @@ class AstVariable(AstNode):
 
    def collect(self, ast: "Ast") -> None:
       # Todo: Actually set the type of the variable.
-      ast.scope_stack[len(ast.scope_stack) - 1][self.name.str_literal] = SymbolVariable(0, self.mutable)
+      ast.scope_stack.add_symbol(self.name.str_literal, SymbolVariable(0, self.mutable))
 
    # Expects that the name and type colon part of the variable declaration syntax has already been parsed
    @staticmethod
@@ -569,7 +594,7 @@ class AstParameter(AstNode):
 
    def collect(self, ast: "Ast") -> None:
       # Todo: Actually set the type of the parameter.
-      ast.scope_stack[len(ast.scope_stack) - 1][self.name.str_literal] = SymbolVariable(0, True)
+      ast.scope_stack.add_symbol(self.name.str_literal, SymbolVariable(0, True))
 
    def __init__(self, name: Token, type: Token | None) -> None:
       self.name = name
@@ -589,10 +614,10 @@ class AstScope(AstNode):
    scope: dict[str, Symbol]
 
    def collect(self, ast: "Ast") -> None:
-      ast.scope_stack.append(self.scope)
+      ast.scope_stack.push_scope(self.scope)
       for ani in self.body:
          ast.nodes[ani].collect(ast)
-      ast.scope_stack.pop()
+      ast.scope_stack.pop_scope()
 
    @staticmethod
    def parse(current_indent: int, lexer: Lexer, ast: "Ast", state: ParsingState) -> ANI:
@@ -649,14 +674,15 @@ class AstClass(AstNode):
    scope: dict[str, Symbol]
 
    def collect(self, ast: "Ast") -> None:
-      ast.scope_stack.append(self.scope)
+      ast.scope_stack.push_scope(self.scope)
       for ani in self.fields:
          ast.nodes[ani].collect(ast)
       for ani in self.methods:
          ast.nodes[ani].collect(ast)
-      ast.scope_stack.pop()
+      ast.scope_stack.pop_scope()
       # Todo: Actually set the type of the class.
-      ast.scope_stack[len(ast.scope_stack) - 1][self.name.str_literal] = SymbolType(0)
+      # ast.types.append(TypeClass())
+      ast.scope_stack.add_symbol(self.name.str_literal, SymbolType(0))
 
    @staticmethod
    def parse(current_indent: int, lexer: Lexer, ast: "Ast", state: ParsingState) -> ANI:
@@ -756,14 +782,14 @@ class AstProcedure(AstNode):
       self.scope = {}
 
    def collect(self, ast: "Ast") -> None:
-      ast.scope_stack.append(self.scope)
+      ast.scope_stack.push_scope(self.scope)
       for ani in self.parameter_types:
          ast.nodes[ani].collect(ast)
       for ani in self.body:
          ast.nodes[ani].collect(ast)
-      ast.scope_stack.pop()
+      ast.scope_stack.pop_scope()
       # Todo: Actually set the type of the procedure.
-      ast.scope_stack[len(ast.scope_stack) - 1][self.name.str_literal] = SymbolProcedure(0)
+      ast.scope_stack.add_symbol(self.name.str_literal, SymbolProcedure(0))
 
    @staticmethod
    def parse(current_indent: int, lexer: Lexer, ast: "Ast", state: ParsingState, in_class: bool = False) -> ANI:
@@ -888,12 +914,12 @@ class AstModule(AstNode):
       self.scope = {}
 
    def collect(self, ast: "Ast") -> None:
-      ast.scope_stack.append(self.scope)
+      ast.scope_stack.push_scope(self.scope)
       for ani in self.procedures:
          ast.nodes[ani].collect(ast)
       for ani in self.types:
          ast.nodes[ani].collect(ast)
-      ast.scope_stack.pop()
+      ast.scope_stack.pop_scope()
 
    # May return [None] when [file_path] does not exist or is not a file.
    @staticmethod
@@ -954,12 +980,12 @@ class Ast:
    nodes: list[AstNode]
    types: list[Type]
    scope: dict[str, Symbol]
-   scope_stack: list[dict[str, Symbol]]
+   scope_stack: ScopeStack
 
    def __init__(self) -> None:
       self.modules = []
       self.nodes = []
-      self.scope_stack = []
+      self.scope_stack = ScopeStack()
       self.types = [
          TypeBit(TypeKind.Bit8, False),
          TypeBit(TypeKind.Bit16, False),
@@ -986,7 +1012,7 @@ class Ast:
 
    def collect_symbols_and_types(self) -> None:
       self.scope_stack.clear()
-      self.scope_stack.append(self.scope)
+      self.scope_stack.push_scope(self.scope)
       for module in self.modules:
          module.collect(self)
 
