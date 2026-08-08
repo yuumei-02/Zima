@@ -2,7 +2,7 @@
 # See the LICENSE file for more information.
 
 from lexer import *
-from typing import TypeAlias
+from typing import TypeAlias, cast
 from pathlib import Path
 import reporter
 from utils import TriBool
@@ -54,8 +54,8 @@ class TypeClass(Type):
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
       print(f"{prefix}{TreePrinter.bool_to_connector(last)}Class")
       prefix += TreePrinter.last_to_prefix_append(last)
-      for i, ani in enumerate(self.fields):
-         ast.nodes[ani].display(ast, prefix, i + 1 >= len(self.fields))
+      for i, type_id in enumerate(self.fields):
+         ast.types[type_id].display(ast, prefix, i + 1 >= len(self.fields))
 
 class TypeProcedure(Type):
    kind = TypeKind.Procedure
@@ -192,6 +192,9 @@ class ParsingState:
    def exit_panic(self) -> None:
       self.panic = False
 
+   def we_failed(self) -> None:
+      self.failure = True
+
 class Operator(Enum):
    Add = iota()
    Sub = iota()
@@ -283,7 +286,7 @@ class AstNodeKind(Enum):
 class AstNode:
    kind: AstNodeKind
 
-   def collect(self, ast: "Ast") -> None:
+   def collect(self, path: str, ast: "Ast", state: ParsingState) -> None:
       panic("unreachable")
 
    @staticmethod
@@ -416,7 +419,7 @@ class AstBinOp(AstNode):
       self.lhs = lhs
       self.rhs = rhs
 
-   def collect(self, ast: "Ast") -> None:
+   def collect(self, path: str, ast: "Ast", state: ParsingState) -> None:
       pass
 
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
@@ -435,7 +438,7 @@ class AstProcedureCall(AstNode):
       self.procedure = procedure
       self.parameters = []
 
-   def collect(self, ast: "Ast") -> None:
+   def collect(self, path: str, ast: "Ast", state: ParsingState) -> None:
       pass
 
    # Expects that the procedure name and the LParen part of the procedure call syntax has already been parsed.
@@ -475,7 +478,7 @@ class AstIdentifier(AstNode):
       self.kind = AstNodeKind.Identifier
       self.value = value
 
-   def collect(self, ast: "Ast") -> None:
+   def collect(self, path: str, ast: "Ast", state: ParsingState) -> None:
       pass
 
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
@@ -489,7 +492,7 @@ class AstStrLiteral(AstNode):
       self.kind = AstNodeKind.StrLiteral
       self.value = value
 
-   def collect(self, ast: "Ast") -> None:
+   def collect(self, path: str, ast: "Ast", state: ParsingState) -> None:
       pass
 
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
@@ -503,7 +506,7 @@ class AstIntLiteral(AstNode):
       self.kind = AstNodeKind.IntLiteral
       self.value = value
 
-   def collect(self, ast: "Ast") -> None:
+   def collect(self, path: str, ast: "Ast", state: ParsingState) -> None:
       pass
 
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
@@ -516,7 +519,7 @@ class AstVariable(AstNode):
    expression: ANI
    mutable: bool
 
-   def collect(self, ast: "Ast") -> None:
+   def collect(self, path: str, ast: "Ast", state: ParsingState) -> None:
       # Todo: Actually set the type of the variable.
       ast.scope_stack.add_symbol(self.name.str_literal, SymbolVariable(0, self.mutable))
 
@@ -573,8 +576,8 @@ class AstReturn(AstNode):
       self.expression = expression
       self.kind = AstNodeKind.Return
 
-   def collect(self, ast: "Ast") -> None:
-      ast.nodes[self.expression].collect(ast)
+   def collect(self, path: str, ast: "Ast", state: ParsingState) -> None:
+      ast.nodes[self.expression].collect(path, ast, state)
 
    @staticmethod
    def parse(lexer: Lexer, ast: "Ast", state: ParsingState) -> ANI:
@@ -592,7 +595,7 @@ class AstParameter(AstNode):
    name: Token
    type: Token | None # Type | Inferred Self type
 
-   def collect(self, ast: "Ast") -> None:
+   def collect(self, path: str, ast: "Ast", state: ParsingState) -> None:
       # Todo: Actually set the type of the parameter.
       ast.scope_stack.add_symbol(self.name.str_literal, SymbolVariable(0, True))
 
@@ -613,10 +616,10 @@ class AstScope(AstNode):
    body: list[ANI]
    scope: dict[str, Symbol]
 
-   def collect(self, ast: "Ast") -> None:
+   def collect(self, path: str, ast: "Ast", state: ParsingState) -> None:
       ast.scope_stack.push_scope(self.scope)
       for ani in self.body:
-         ast.nodes[ani].collect(ast)
+         ast.nodes[ani].collect(path, ast, state)
       ast.scope_stack.pop_scope()
 
    @staticmethod
@@ -673,16 +676,31 @@ class AstClass(AstNode):
    methods: list[ANI]
    scope: dict[str, Symbol]
 
-   def collect(self, ast: "Ast") -> None:
+   def collect(self, path: str, ast: "Ast", state: ParsingState) -> None:
       ast.scope_stack.push_scope(self.scope)
       for ani in self.fields:
-         ast.nodes[ani].collect(ast)
+         ast.nodes[ani].collect(path, ast, state)
       for ani in self.methods:
-         ast.nodes[ani].collect(ast)
+         ast.nodes[ani].collect(path, ast, state)
+
+      field_types: list[TypeId] = []
+      for field in self.fields:
+         field_type_name = cast(AstParameter, ast.nodes[field]).type
+         if field_type_name is None:
+            reporter.class_field_of_type_self(path, cast(AstParameter, ast.nodes[field]).name)
+            state.we_failed()
+            continue
+
+         field_symbol = ast.scope_stack.search_symbol(field_type_name.str_literal)
+         if field_symbol is None:
+            reporter.type_does_not_exist(path, field_type_name)
+            state.we_failed()
+         else:
+            field_types.append(field_symbol.type)
+
       ast.scope_stack.pop_scope()
-      # Todo: Actually set the type of the class.
-      # ast.types.append(TypeClass())
-      ast.scope_stack.add_symbol(self.name.str_literal, SymbolType(0))
+      ast.types.append(TypeClass(field_types))
+      ast.scope_stack.add_symbol(self.name.str_literal, SymbolType(len(ast.types) - 1))
 
    @staticmethod
    def parse(current_indent: int, lexer: Lexer, ast: "Ast", state: ParsingState) -> ANI:
@@ -781,12 +799,12 @@ class AstProcedure(AstNode):
       self.body = []
       self.scope = {}
 
-   def collect(self, ast: "Ast") -> None:
+   def collect(self, path: str, ast: "Ast", state: ParsingState) -> None:
       ast.scope_stack.push_scope(self.scope)
       for ani in self.parameter_types:
-         ast.nodes[ani].collect(ast)
+         ast.nodes[ani].collect(path, ast, state)
       for ani in self.body:
-         ast.nodes[ani].collect(ast)
+         ast.nodes[ani].collect(path, ast, state)
       ast.scope_stack.pop_scope()
       # Todo: Actually set the type of the procedure.
       ast.scope_stack.add_symbol(self.name.str_literal, SymbolProcedure(0))
@@ -906,31 +924,33 @@ class AstModule(AstNode):
    procedures: list[ANI]
    types: list[ANI]
    scope: dict[str, Symbol]
+   file_path: str
 
    def __init__(self, name: str) -> None:
       self.name = name
       self.procedures = []
       self.types = []
       self.scope = {}
+      self.file_path = ""
 
-   def collect(self, ast: "Ast") -> None:
+   def collect(self, path: str, ast: "Ast", state: ParsingState) -> None:
       ast.scope_stack.push_scope(self.scope)
       for ani in self.procedures:
-         ast.nodes[ani].collect(ast)
+         ast.nodes[ani].collect(self.file_path, ast, state)
       for ani in self.types:
-         ast.nodes[ani].collect(ast)
+         ast.nodes[ani].collect(self.file_path, ast, state)
       ast.scope_stack.pop_scope()
 
    # May return [None] when [file_path] does not exist or is not a file.
    @staticmethod
-   def parse(file_path: str, ast: "Ast") -> "AstModule | None":
+   def parse(file_path: str, ast: "Ast", state: ParsingState) -> "AstModule | None":
       # Todo: Check if the file already exists
       if not Path(file_path).is_file():
          return None
 
       lexer = Lexer(file_path)
-      state = ParsingState()
       self = AstModule(Path(file_path).stem)
+      self.file_path = lexer.file_path
 
       while True:
          token: Token = lexer.next()
@@ -1010,11 +1030,14 @@ class Ast:
          "sbit64": SymbolType(7)
       }
 
-   def collect_symbols_and_types(self) -> None:
+   def collect_symbols_and_types(self) -> bool:
+      state = ParsingState()
       self.scope_stack.clear()
       self.scope_stack.push_scope(self.scope)
       for module in self.modules:
-         module.collect(self)
+         module.collect("", self, state)
+
+      return state.failure
 
    def dump(self) -> None:
       print(".")
@@ -1034,12 +1057,15 @@ class Ast:
 
 class Parser:
    @staticmethod
-   def parse_file(file_path: str) -> Ast:
+   def parse_file(file_path: str) -> Ast | None:
       ast = Ast()
-      module = AstModule.parse(file_path, ast)
+      state = ParsingState()
+      module = AstModule.parse(file_path, ast, state)
       if module is None:
          print(f"[ERROR] File \"{file_path}\" either doesn't exist or is not a file.", file=sys.stderr)
          exit()
 
       ast.modules.append(module)
+      if state.failure:
+         return None
       return ast

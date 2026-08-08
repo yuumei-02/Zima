@@ -25,3 +25,9 @@ def under_indent(path: str, token: "Token") -> None:
 
 def over_indent(path: str, token: "Token") -> None:
    print(f"{path}:{token.y}:{token.x}: error: Expected an indentation equal to that of the current block.", file=sys.stderr)
+
+def class_field_of_type_self(path: str, token: "Token") -> None:
+   print(f"{path}:{token.y}:{token.x}: error: Class field can't be of type Self.", file=sys.stderr)
+
+def type_does_not_exist(path: str, token: "Token") -> None:
+   print(f"{path}:{token.y}:{token.x}: error: Type \"{token.str_literal}\" does not exists", file=sys.stderr)

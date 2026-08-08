@@ -3,6 +3,9 @@
 
 // This is not an example but rather a testing ground for developing the compiler.
 
+class int:
+   value: sbit32
+
 def scopes():
    scope:
       return 40

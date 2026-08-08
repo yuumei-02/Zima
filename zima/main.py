@@ -14,17 +14,22 @@ def token_dump(file: str) -> None:
       if token.kind == TokenKind.Eof:
          break
 
-def compile_program(file: str, flags: CompileFlags) -> None:
+def compile_program(file: str, flags: CompileFlags) -> bool:
    if flags.token_dump:
       token_dump(file)
-      return
+      return False
 
-   # Todo: Early out on parsing failure
-   ast: Ast = Parser.parse_file(file)
-   ast.collect_symbols_and_types()
+   ast: Ast | None = Parser.parse_file(file)
+   if ast is None:
+      return True
+
+   if ast.collect_symbols_and_types():
+      return True
+
    if flags.ast_dump:
       ast.dump()
-      return
+
+   return False
 
 def main() -> None:
    args: list[str] = sys.argv
@@ -42,7 +47,9 @@ def main() -> None:
          case _:              files.append(args[i + 1])
 
    for file in files:
-      compile_program(file, flags)
+      if compile_program(file, flags):
+         print("Compilation failure", file=sys.stderr)
+         return
 
 if __name__ == "__main__":
    main()

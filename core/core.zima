@@ -2,7 +2,7 @@
 // See the LICENSE file for more information.
 
 class int:
-   value: Bit32
+   value: sbit32
 
    def __add__(self, other: int) -> int:
       return self.value + other.value
