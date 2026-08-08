@@ -24,7 +24,8 @@ def compile_program(file: str, flags: CompileFlags) -> bool:
       return True
 
    if ast.collect_symbols_and_types():
-      return True
+      pass
+      # return True
 
    if flags.ast_dump:
       ast.dump()

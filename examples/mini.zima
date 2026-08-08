@@ -6,6 +6,9 @@
 class int:
    value: sbit32
 
+class str:
+   value: ubit8
+
 def scopes():
    scope:
       return 40
@@ -20,8 +23,8 @@ def add(a: int, b: int) -> int:
    return result
 
 def main():
-   val := add(1, 2)
-   msg :: "Zhyivannye miratte"
+   val: int = add(1, 2)
+   msg: str : "Zhyivannye miratte"
 
 class Vec2:
    x: int
@@ -32,5 +35,5 @@ class Vec2:
       self.y = y
 
    def area(self) -> int:
-      area := self.x * self.y
+      area: int = self.x * self.y
       return area

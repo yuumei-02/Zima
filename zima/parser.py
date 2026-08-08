@@ -520,8 +520,18 @@ class AstVariable(AstNode):
    mutable: bool
 
    def collect(self, path: str, ast: "Ast", state: ParsingState) -> None:
-      # Todo: Actually set the type of the variable.
-      ast.scope_stack.add_symbol(self.name.str_literal, SymbolVariable(0, self.mutable))
+      if self.type is None or isinstance(self.type, str):
+         reporter.type_inference_not_yet_supported(path, self.name)
+         state.we_failed()
+         return
+
+      type_symbol: Symbol | None = ast.scope_stack.search_symbol(self.type.str_literal)
+      if type_symbol is None:
+         reporter.type_does_not_exist(path, self.type)
+         state.we_failed()
+         return
+
+      ast.scope_stack.add_symbol(self.name.str_literal, SymbolVariable(type_symbol.type, self.mutable))
 
    # Expects that the name and type colon part of the variable declaration syntax has already been parsed
    @staticmethod
@@ -935,9 +945,9 @@ class AstModule(AstNode):
 
    def collect(self, path: str, ast: "Ast", state: ParsingState) -> None:
       ast.scope_stack.push_scope(self.scope)
-      for ani in self.procedures:
-         ast.nodes[ani].collect(self.file_path, ast, state)
       for ani in self.types:
+         ast.nodes[ani].collect(self.file_path, ast, state)
+      for ani in self.procedures:
          ast.nodes[ani].collect(self.file_path, ast, state)
       ast.scope_stack.pop_scope()
 
