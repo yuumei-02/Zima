@@ -5,6 +5,7 @@ from lexer import *
 
 # Todo: Expand [path] to an absolute path using pathlib
 def unexpected_token(path: str, token: "Token", expected: list["TokenKind"]) -> None:
+   path = str(Path(path).relative_to(Path.cwd()))
    print(f"{path}:{token.y}:{token.x}: error: Unexpected token \"{token.kind.to_str()}\"", file=sys.stderr, end="")
 
    match len(expected):
@@ -21,16 +22,25 @@ def unexpected_token(path: str, token: "Token", expected: list["TokenKind"]) -> 
                print(f" or {expected[i + 1].to_str()}", file=sys.stderr)
 
 def under_indent(path: str, token: "Token") -> None:
+   path = str(Path(path).relative_to(Path.cwd()))
    print(f"{path}:{token.y}:{token.x}: error: Expected an indentation greater than that of the previous block.", file=sys.stderr)
 
 def over_indent(path: str, token: "Token") -> None:
+   path = str(Path(path).relative_to(Path.cwd()))
    print(f"{path}:{token.y}:{token.x}: error: Expected an indentation equal to that of the current block.", file=sys.stderr)
 
 def class_field_of_type_self(path: str, token: "Token") -> None:
+   path = str(Path(path).relative_to(Path.cwd()))
    print(f"{path}:{token.y}:{token.x}: error: Class field can't be of type Self.", file=sys.stderr)
 
 def type_does_not_exist(path: str, token: "Token") -> None:
+   path = str(Path(path).relative_to(Path.cwd()))
    print(f"{path}:{token.y}:{token.x}: error: Type \"{token.str_literal}\" does not exists", file=sys.stderr)
 
 def type_inference_not_yet_supported(path: str, token: "Token") -> None:
+   path = str(Path(path).relative_to(Path.cwd()))
    print(f"{path}:{token.y}:{token.x}: error: Type inference is not yet supported", file=sys.stderr)
+
+def module_does_not_exist(path: str, token: "Token") -> None:
+   path = str(Path(path).relative_to(Path.cwd()))
+   print(f"{path}:{token.y}:{token.x}: error: Imported module \"{token.str_literal}\" does not exists.", file=sys.stderr)

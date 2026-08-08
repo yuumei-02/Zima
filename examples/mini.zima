@@ -3,6 +3,8 @@
 
 // This is not an example but rather a testing ground for developing the compiler.
 
+import "./include-able.zima"
+
 def scopes():
    scope:
       return 40

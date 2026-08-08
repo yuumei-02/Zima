@@ -2,7 +2,7 @@
 # See the LICENSE file for more information.
 
 import sys
-from enum import Enum
+from pathlib import Path
 from utils import *
 import reporter
 
@@ -32,6 +32,7 @@ class TokenKind(Enum):
    StrLiteral = iota()
 
    # Keywords
+   Import = iota()
    Class  = iota()
    Def    = iota()
    Return = iota()
@@ -40,7 +41,7 @@ class TokenKind(Enum):
    Count  = reset()
 
    def to_str(self) -> str:
-      assert TokenKind.Count.value == 21
+      assert TokenKind.Count.value == 22
       match self:
          case TokenKind.Eof:        return "Eof"
          case TokenKind.NewLine:    return "NewLine"
@@ -58,6 +59,7 @@ class TokenKind(Enum):
          case TokenKind.Identifier: return "Identifier"
          case TokenKind.IntLiteral: return "IntLiteral"
          case TokenKind.StrLiteral: return "StrLiteral"
+         case TokenKind.Import:     return "Import"
          case TokenKind.Class:      return "Class"
          case TokenKind.Def:        return "Def"
          case TokenKind.Return:     return "Return"
@@ -68,6 +70,7 @@ class TokenKind(Enum):
             unreachable()
 
 keywords: dict[str, TokenKind] = {
+   "import": TokenKind.Import,
    "class": TokenKind.Class,
    "def": TokenKind.Def,
    "return": TokenKind.Return,
@@ -123,10 +126,12 @@ class Lexer:
       self.z = -1
       self.y = 1
       self.x = 0
-      self.file_path = file_path
       self.undone_tokens = []
+
+      self.file_path = str(Path(file_path).absolute())
+
       try:
-         with open(file_path, "r") as f:
+         with open(self.file_path, "r") as f:
             self.file_contents = f.read()
       except Exception as e:
          print(f"[ERROR] Failed to create read from file {file_path}, reason: \"{str(e)}\"",

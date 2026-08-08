@@ -960,12 +960,12 @@ class AstModule(AstNode):
    scope: dict[str, Symbol]
    file_path: str
 
-   def __init__(self, name: str) -> None:
+   def __init__(self, name: str, path: str) -> None:
       self.name = name
       self.procedures = []
       self.types = []
       self.scope = {}
-      self.file_path = ""
+      self.file_path = str(Path(path).absolute())
 
    def collect(self, path: str, ast: "Ast", state: ParsingState) -> None:
       ast.scope_stack.push_scope(self.scope)
@@ -975,20 +975,39 @@ class AstModule(AstNode):
          ast.nodes[ani].collect(self.file_path, ast, state)
       ast.scope_stack.pop_scope()
 
-   # May return [None] when [file_path] does not exist or is not a file.
+   # May return [True] on hard failure and [False] on file already included.
    @staticmethod
-   def parse(file_path: str, ast: "Ast", state: ParsingState) -> "AstModule | None":
-      # Todo: Check if the file already exists
+   def parse(file_path: str, ast: "Ast", state: ParsingState, relative_to: str | None = None) -> "AstModule | bool":
+      if isinstance(relative_to, str):
+         file_path = str(Path(relative_to).parent / Path(file_path))
+
       if not Path(file_path).is_file():
-         return None
+         return True
+
+      if ast.included_files.get(str(Path(file_path).absolute())) is not None:
+         return False
 
       lexer = Lexer(file_path)
-      self = AstModule(Path(file_path).stem)
-      self.file_path = lexer.file_path
+      self = AstModule(Path(file_path).stem, lexer.file_path)
+      ast.included_files[lexer.file_path] = True
 
       while True:
          token: Token = lexer.next()
          match token.kind:
+            case TokenKind.Import:
+               state.exit_panic()
+               token = lexer.next_and_expect(state, [TokenKind.StrLiteral])
+               if state.panic:
+                  continue
+
+               module = AstModule.parse(token.str_literal, ast, state, relative_to=self.file_path)
+               if isinstance(module, bool):
+                  if module:
+                     reporter.module_does_not_exist(lexer.file_path, token)
+                     state.we_failed()
+               else:
+                  ast.modules.append(module)
+
             case TokenKind.Def:
                state.exit_panic()
                proc: ANI = AstProcedure.parse(token.indent, lexer, ast, state)
@@ -1035,8 +1054,10 @@ class Ast:
    types: list[Type]
    scope: dict[str, Symbol]
    scope_stack: ScopeStack
+   included_files: dict[str, bool]
 
    def __init__(self) -> None:
+      self.included_files = {}
       self.modules = []
       self.nodes = []
       self.scope_stack = ScopeStack()
@@ -1098,20 +1119,19 @@ class Parser:
       state = ParsingState()
 
       core = AstModule.parse(core_path, ast, state)
-      if core is None:
+      if state.failure: panic("unreachable")
+      if isinstance(core, bool):
          print(f"[ERROR] Couldn't find the core library at path \"{core_path}\".", file=sys.stderr)
-         exit()
-
+         return None
       ast.modules.append(core)
-      if state.failure:
-         panic("unreachable")
 
       module = AstModule.parse(file_path, ast, state)
-      if module is None:
-         print(f"[ERROR] File \"{file_path}\" either doesn't exist or is not a file.", file=sys.stderr)
-         exit()
+      if state.failure: return None
+
+      if isinstance(module, bool):
+         if module:
+            print(f"[ERROR] File \"{file_path}\" either doesn't exist or is not a file.", file=sys.stderr)
+         return None
 
       ast.modules.append(module)
-      if state.failure:
-         return None
       return ast
