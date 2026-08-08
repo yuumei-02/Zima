@@ -10,6 +10,7 @@ from utils import TriBool
 ANI: TypeAlias = int
 
 class TypeKind(Enum):
+   Bit1 = iota()
    Bit8 = iota()
    Bit16 = iota()
    Bit32 = iota()
@@ -37,6 +38,7 @@ class TypeBit(Type):
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
       print(f"{prefix}{TreePrinter.bool_to_connector(last)}", end="")
       match self.kind:
+         case TypeKind.Bit1:  print(f"Bit1 (signed={self.signed})")
          case TypeKind.Bit8:  print(f"Bit8 (signed={self.signed})");
          case TypeKind.Bit16: print(f"Bit16 (signed={self.signed})");
          case TypeKind.Bit32: print(f"Bit32 (signed={self.signed})");
@@ -1039,6 +1041,7 @@ class Ast:
       self.nodes = []
       self.scope_stack = ScopeStack()
       self.types = [
+         TypeBit(TypeKind.Bit1, False),
          TypeBit(TypeKind.Bit8, False),
          TypeBit(TypeKind.Bit16, False),
          TypeBit(TypeKind.Bit32, False),
@@ -1051,15 +1054,16 @@ class Ast:
       ]
 
       self.scope = {
-         "ubit8": SymbolType(0),
-         "ubit16": SymbolType(1),
-         "ubit32": SymbolType(2),
-         "ubit64": SymbolType(3),
+         "bit": SymbolType(0),
+         "ubit8": SymbolType(1),
+         "ubit16": SymbolType(2),
+         "ubit32": SymbolType(3),
+         "ubit64": SymbolType(4),
 
-         "sbit8": SymbolType(4),
-         "sbit16": SymbolType(5),
-         "sbit32": SymbolType(6),
-         "sbit64": SymbolType(7)
+         "sbit8": SymbolType(5),
+         "sbit16": SymbolType(6),
+         "sbit32": SymbolType(7),
+         "sbit64": SymbolType(8)
       }
 
    def collect_symbols_and_types(self) -> bool:
