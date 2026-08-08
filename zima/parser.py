@@ -603,20 +603,35 @@ class AstReturn(AstNode):
 
 class AstParameter(AstNode):
    name: Token
-   type: Token | None # Type | Inferred Self type
+   type: Token | str # Type | Inferred Self type
 
    def collect(self, path: str, ast: "Ast", state: ParsingState) -> None:
-      # Todo: Actually set the type of the parameter.
-      ast.scope_stack.add_symbol(self.name.str_literal, SymbolVariable(0, True))
+      # Todo: Handle the None case
+      type_name: str
+      if isinstance(self.type, str):
+         type_name = self.type
+      else:
+         type_name = self.type.str_literal
 
-   def __init__(self, name: Token, type: Token | None) -> None:
+      type_symbol = ast.scope_stack.search_symbol(type_name)
+      if type_symbol is None:
+         if isinstance(self.type, Token):
+            reporter.type_does_not_exist(path, self.type)
+         else:
+            reporter.type_does_not_exist(path, self.name)
+         state.we_failed()
+         return
+
+      ast.scope_stack.add_symbol(self.name.str_literal, SymbolVariable(type_symbol.type, True))
+
+   def __init__(self, name: Token, type: Token | str) -> None:
       self.name = name
       self.type = type
       self.kind = AstNodeKind.Parameter
 
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
-      if self.type is None:
-         print(f"{prefix}{TreePrinter.bool_to_connector(last)}{self.name.str_literal}: Self")
+      if isinstance(self.type, str):
+         print(f"{prefix}{TreePrinter.bool_to_connector(last)}{self.name.str_literal}: {self.type}")
       else:
          print(f"{prefix}{TreePrinter.bool_to_connector(last)}{self.name.str_literal}: {self.type.str_literal}")
 
@@ -690,13 +705,11 @@ class AstClass(AstNode):
       ast.scope_stack.push_scope(self.scope)
       for ani in self.fields:
          ast.nodes[ani].collect(path, ast, state)
-      for ani in self.methods:
-         ast.nodes[ani].collect(path, ast, state)
 
       field_types: list[TypeId] = []
       for field in self.fields:
          field_type_name = cast(AstParameter, ast.nodes[field]).type
-         if field_type_name is None:
+         if isinstance(field_type_name, str):
             reporter.class_field_of_type_self(path, cast(AstParameter, ast.nodes[field]).name)
             state.we_failed()
             continue
@@ -711,6 +724,9 @@ class AstClass(AstNode):
       ast.scope_stack.pop_scope()
       ast.types.append(TypeClass(field_types))
       ast.scope_stack.add_symbol(self.name.str_literal, SymbolType(len(ast.types) - 1))
+
+      for ani in self.methods:
+         ast.nodes[ani].collect(path, ast, state)
 
    @staticmethod
    def parse(current_indent: int, lexer: Lexer, ast: "Ast", state: ParsingState) -> ANI:
@@ -763,7 +779,7 @@ class AstClass(AstNode):
                self.fields.append(len(ast.nodes) - 1)
 
             case TokenKind.Def:
-               proc: ANI = AstProcedure.parse(token.indent, lexer, ast, state, in_class=True)
+               proc: ANI = AstProcedure.parse(token.indent, lexer, ast, state, in_class=True, class_name=self.name.str_literal)
                if proc >= 0:
                   self.methods.append(proc)
 
@@ -820,7 +836,7 @@ class AstProcedure(AstNode):
       ast.scope_stack.add_symbol(self.name.str_literal, SymbolProcedure(0))
 
    @staticmethod
-   def parse(current_indent: int, lexer: Lexer, ast: "Ast", state: ParsingState, in_class: bool = False) -> ANI:
+   def parse(current_indent: int, lexer: Lexer, ast: "Ast", state: ParsingState, in_class: bool = False, class_name: str | None = None) -> ANI:
       self = AstProcedure(lexer.next())
       if self.name.kind != TokenKind.Identifier:
          state.enter_panic()
@@ -861,10 +877,9 @@ class AstProcedure(AstNode):
                      expected = [TokenKind.Colon]
                      if in_class and parameter_name.str_literal == "self":
                         self.parameter_types.append(len(ast.nodes))
-                        param = AstParameter(parameter_name, None)
+                        assert class_name is not None, "if in_class is set to true, class_name must also be set"
+                        param = AstParameter(parameter_name, class_name)
                         ast.nodes.append(param)
-                        # Todo: Actually set the type of the parameter
-                        self.scope[param.name.str_literal] = SymbolVariable(0, True)
                         expected = [TokenKind.Comma, TokenKind.RParen]
                         identifier_as_type = TriBool.neutral
 
@@ -872,8 +887,6 @@ class AstProcedure(AstNode):
                      self.parameter_types.append(len(ast.nodes))
                      param = AstParameter(parameter_name, token)
                      ast.nodes.append(param)
-                     # Todo: Actually set the type of the parameter.
-                     self.scope[param.name.str_literal] = SymbolVariable(0, True)
                      expected = [TokenKind.Comma, TokenKind.RParen]
 
                   case TriBool.neutral:
