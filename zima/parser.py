@@ -97,6 +97,7 @@ class TypePointer(Type):
       ast.types[self.pointee].display(ast, prefix, True)
 
 class SymbolKind(Enum):
+   Module = iota()
    Variable = iota()
    Procedure = iota()
    Type = iota()
@@ -108,6 +109,16 @@ class Symbol:
 
    def display(self, name: str, ast: "Ast", prefix: str, last: bool) -> None:
       assert False, "Missing implementation for procedure display in one of the Symbol subclasses."
+
+class SymbolModule(Symbol):
+   kind = SymbolKind.Module
+   node: ANI
+
+   def __init__(self, node: ANI) -> None:
+      self.node = node
+
+   def display(self, name: str, ast: "Ast", prefix: str, last: bool) -> None:
+      print(f"{prefix}{TreePrinter.bool_to_connector(last)}{name}: Module")
 
 class SymbolVariable(Symbol):
    kind = SymbolKind.Variable
@@ -456,22 +467,23 @@ class AstProcedureCall(AstNode):
       self = AstProcedureCall(procedure)
 
       while True:
-         self.parameters.append(AstNode.parse_expression(-1, lexer, ast, state))
-         token: Token = lexer.next()
-
+         token: Token = lexer.peek()
          match token.kind:
             case TokenKind.RParen:
                state.exit_panic()
+               lexer.next()
                ast.nodes.append(self)
                return len(ast.nodes) - 1
 
             case TokenKind.Comma:
-               pass
+               lexer.next()
+
+            case TokenKind.Eof:
+               state.enter_panic()
+               return -1
 
             case _:
-               if not state.panic:
-                  state.enter_panic()
-                  reporter.unexpected_token(lexer.file_path, token, [TokenKind.Comma, TokenKind.RParen])
+               self.parameters.append(AstNode.parse_expression(-1, lexer, ast, state))
 
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
       print(f"{prefix}{TreePrinter.bool_to_connector(last)}{self.procedure.str_literal}")
@@ -968,6 +980,9 @@ class AstModule(AstNode):
       self.file_path = str(Path(path).absolute())
 
    def collect(self, path: str, ast: "Ast", state: ParsingState) -> None:
+      # Because the Module symbol requires the module's ANI.
+      # The creation of this symbol is done in the parsing phase instead
+
       ast.scope_stack.push_scope(self.scope)
       for ani in self.types:
          ast.nodes[ani].collect(self.file_path, ast, state)
@@ -977,7 +992,7 @@ class AstModule(AstNode):
 
    # May return [True] on hard failure and [False] on file already included.
    @staticmethod
-   def parse(file_path: str, ast: "Ast", state: ParsingState, relative_to: str | None = None) -> "AstModule | bool":
+   def parse(file_path: str, ast: "Ast", state: ParsingState, relative_to: str | None = None) -> bool:
       if isinstance(relative_to, str):
          file_path = str(Path(relative_to).parent / Path(file_path))
 
@@ -1001,12 +1016,9 @@ class AstModule(AstNode):
                   continue
 
                module = AstModule.parse(token.str_literal, ast, state, relative_to=self.file_path)
-               if isinstance(module, bool):
-                  if module:
-                     reporter.module_does_not_exist(lexer.file_path, token)
-                     state.we_failed()
-               else:
-                  ast.modules.append(module)
+               if module:
+                  reporter.module_does_not_exist(lexer.file_path, token)
+                  state.we_failed()
 
             case TokenKind.Def:
                state.exit_panic()
@@ -1028,7 +1040,9 @@ class AstModule(AstNode):
                state.enter_panic()
                reporter.unexpected_token(file_path, token, [])
 
-      return self
+      ast.scope[self.name] = SymbolModule(len(ast.modules))
+      ast.modules.append(self)
+      return False
 
    def display(self, ast: "Ast", prefix: str, last: bool) -> None:
       print(f"{prefix}{TreePrinter.bool_to_connector(last)}Module: {self.name}")
@@ -1120,18 +1134,14 @@ class Parser:
 
       core = AstModule.parse(core_path, ast, state)
       if state.failure: panic("unreachable")
-      if isinstance(core, bool):
+      if core:
          print(f"[ERROR] Couldn't find the core library at path \"{core_path}\".", file=sys.stderr)
          return None
-      ast.modules.append(core)
 
       module = AstModule.parse(file_path, ast, state)
       if state.failure: return None
-
-      if isinstance(module, bool):
-         if module:
-            print(f"[ERROR] File \"{file_path}\" either doesn't exist or is not a file.", file=sys.stderr)
+      if module:
+         print(f"[ERROR] File \"{file_path}\" either doesn't exist or is not a file.", file=sys.stderr)
          return None
 
-      ast.modules.append(module)
       return ast
