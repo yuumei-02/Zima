@@ -7,3 +7,7 @@ Zima requires a relatively recent version of python3 to run as the compiler uses
 The compiler runs on python 3.13.2 and beyond. It may run on python 3.12, but I haven't tested that yet. <br>
 After installing the correct python version, run the compiler using ```python3 main.py```. <br>
 You may now pass zima programs to the compiler to compile them! <br>
+
+# Optional dependencies
+## Graphviz
+The --ir-dump flag, used to output the program's IR, requires graphviz to be installed globally in order to generate the svg of the IR graph. <br>
