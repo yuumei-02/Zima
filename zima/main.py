@@ -3,7 +3,7 @@
 
 from flags import *
 from lexer import *
-from parser import *
+import parser
 
 def token_dump(file: str) -> None:
    lexer = Lexer(file)
@@ -19,7 +19,7 @@ def compile_program(file: str, flags: CompileFlags) -> bool:
       token_dump(file)
       return False
 
-   ast: Ast | None = Parser.parse_file(file, flags.core_path)
+   ast: parser.Ast | None = parser.Parser.parse_file(file, flags.core_path)
    if ast is None:
       return True
 
