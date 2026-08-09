@@ -31,6 +31,10 @@ def compile_program(file: str, flags: CompileFlags) -> bool:
       ast.dump()
       return False
 
+   if flags.ir_test:
+      zmir.test_ir().dump()
+      return False
+
    ir: zmir.ZMIR = ast.generate_zmir()
    if flags.ir_dump:
       ir.dump()
@@ -51,6 +55,7 @@ def main() -> None:
          case "--token-dump": flags.token_dump = True
          case "--ast-dump":   flags.ast_dump = True
          case "--ir-dump":    flags.ir_dump = True
+         case "--ir-test":    flags.ir_test = True
          case _:
             if args[i + 1].startswith("--core-path="):
                flags.core_path = args[i + 1].removeprefix("--core-path=")
