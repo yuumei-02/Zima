@@ -2,8 +2,7 @@
 # See the LICENSE file for more information.
 
 from enum import Enum
-from operator import truediv
-from typing import TypeAlias, NoReturn
+from typing import NoReturn
 
 __iota__: int = 0
 

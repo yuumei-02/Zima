@@ -6,6 +6,7 @@ from typing import TypeAlias, cast
 from pathlib import Path
 import reporter
 from utils import TriBool
+import zmir
 
 ANI: TypeAlias = int
 
@@ -1109,6 +1110,10 @@ class Ast:
          module.collect("", self, state)
 
       return state.failure
+
+   def generate_zmir(self) -> zmir.ZMIR:
+      ir = zmir.ZMIR()
+      return ir
 
    def dump(self) -> None:
       print(".")

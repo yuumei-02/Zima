@@ -4,6 +4,7 @@
 from flags import *
 from lexer import *
 import parser
+import zmir
 
 def token_dump(file: str) -> None:
    lexer = Lexer(file)
@@ -28,6 +29,11 @@ def compile_program(file: str, flags: CompileFlags) -> bool:
 
    if flags.ast_dump:
       ast.dump()
+      return False
+
+   ir: zmir.ZMIR = ast.generate_zmir()
+   if flags.ir_dump:
+      ir.dump()
 
    return False
 
@@ -44,6 +50,7 @@ def main() -> None:
       match args[i + 1]:
          case "--token-dump": flags.token_dump = True
          case "--ast-dump":   flags.ast_dump = True
+         case "--ir-dump":    flags.ir_dump = True
          case _:
             if args[i + 1].startswith("--core-path="):
                flags.core_path = args[i + 1].removeprefix("--core-path=")

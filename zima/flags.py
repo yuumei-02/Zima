@@ -4,9 +4,11 @@
 class CompileFlags:
    token_dump: bool
    ast_dump: bool
+   ir_dump: bool
    core_path: str
 
    def __init__(self) -> None:
       self.token_dump = False
       self.ast_dump = False
+      self.ir_dump = False
       self.core_path = "./core/core.zima"

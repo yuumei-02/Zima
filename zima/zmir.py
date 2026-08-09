@@ -4,6 +4,7 @@
 from utils import *
 from enum import Enum
 from typing import TypeAlias
+import os
 
 TypeId: TypeAlias = int
 
@@ -36,17 +37,20 @@ class Type:
    kind: TypeKind
 
    def size(self) -> int:
-      panic("Missing implementation for method \"size\" in one of the type subclasses")
+      panic("Missing implementation for method \"size\" in one of the type subclasses.")
 
    def alignment(self) -> int:
-      panic("Missing implementation for method \"alignment\" in one of the type subclasses")
+      panic("Missing implementation for method \"alignment\" in one of the type subclasses.")
+
+   def to_str(self, type_table: list["Type"]) -> str:
+      panic("Missing implementation for method \"to_str\" in one of the type subclasses.")
 
 class TypeScalar(Type):
    def __init__(self, kind: TypeKind) -> None:
       self.kind = kind
 
    def size(self) -> int:
-      match self:
+      match self.kind:
          case TypeKind.i1:  return 1
          case TypeKind.i8:  return 1
          case TypeKind.i16: return 2
@@ -63,7 +67,7 @@ class TypeScalar(Type):
       return self.size()
 
    def is_signed(self) -> bool:
-      match self:
+      match self.kind:
          case TypeKind.i1:  return True
          case TypeKind.i8:  return True
          case TypeKind.i16: return True
@@ -76,16 +80,32 @@ class TypeScalar(Type):
          case _:
             panic("unreachable")
 
+   def to_str(self, type_table: list["Type"]) -> str:
+      match self.kind:
+         case TypeKind.i1:  return "i1"
+         case TypeKind.i8:  return "i8"
+         case TypeKind.i16: return "i16"
+         case TypeKind.i32: return "i32"
+         case TypeKind.i64: return "i64"
+         case TypeKind.u8:  return "u8"
+         case TypeKind.u16: return "u16"
+         case TypeKind.u32: return "u32"
+         case TypeKind.u64: return "u64"
+         case _:
+            panic("unreachable")
+
 class TypeAggregate(Type):
    kind = TypeKind.Aggregate
    fields: list[tuple[int, TypeId]] # A tuple of padding and the field type
    byte_size: int
    alignment: int
+   name: str
 
-   def __init__(self, type_table: list[Type], fields: list[TypeId]):
+   def __init__(self, name: str, type_table: list[Type], fields: list[TypeId]):
       self.fields = []
       self.alignment = 0
       self.byte_size = 0
+      self.name = name
 
       address: int = 0
       for type_id in fields:
@@ -105,6 +125,9 @@ class TypeAggregate(Type):
    def alignment(self) -> int:
       return self.alignment
 
+   def to_str(self, type_table: list["Type"]) -> str:
+      return f"Aggregate[{self.name}]"
+
 class TypePointer(Type):
    kind = TypeKind.Pointer
    pointee: TypeId
@@ -117,6 +140,9 @@ class TypePointer(Type):
 
    def alignment(self) -> int:
       return 8
+
+   def to_str(self, type_table: list["Type"]) -> str:
+      return f"ptr[{type_table[self.pointee].to_str(type_table)}]"
 
 class ZMIR:
    type_table: list[Type]
@@ -138,4 +164,13 @@ class ZMIR:
       self.type_table.append(type)
 
    def dump(self) -> None:
-      print(self.type_table)
+      with open("./output.dot", "w") as f:
+         f.write("digraph {\n")
+         f.write("subgraph type_table {\n")
+         for typ in self.type_table:
+            f.write(f"{typ.to_str(self.type_table)}\n")
+         f.write("}\n")
+         f.write("}\n")
+
+      os.system("dot -Tsvg ./output.dot > ./output.svg")
+      os.system("rm ./output.dot")
