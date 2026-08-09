@@ -1,3 +1,4 @@
 zima/__pycache__/
 .venv
 .idea
+*.svg
