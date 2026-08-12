@@ -1,0 +1,16 @@
+// Copyright (c) 2026 yuumei-02. All Rights Reserved.
+// See the LICENSE file for more information.
+
+def add(a: int, b: int) -> int:
+   result: int = a + b
+   return result
+
+def main():
+   // Mutable.
+   val: int = add(1, 2)
+
+   // Immutable since it is initialized via the colon operator.
+   msg: str : "Zhyivannye miratte"
+
+   // You may leave out the variable type to let the compiler infer it for you.
+   inferred := 1234

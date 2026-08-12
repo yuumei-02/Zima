@@ -1,0 +1,31 @@
+// Copyright (c) 2026 yuumei-02. All Rights Reserved.
+// See the LICENSE file for more information.
+
+// Classes are aggregate datatypes that group values and associated procedures
+// under one namespace.
+// There are two kinds of methods.
+// The first kind is a normal method that functions like any other procedure.
+// The second kind are special procedures which features of the language may implicitly call.
+// An example of this is the + operator. For bit intrinsics, it is a regular add operation, but for class types,
+// it implicitly turns into a call to the __add__ method for object on the left hand side of the operation.
+// All special methods start and end with 2 underscores.
+// These special methods can be implemented for any class allowing your custom datatypes to interop with the
+// language closely.
+// Indexing and iteration works the same way.
+
+class Vec2:
+   x: int
+   y: int
+
+   def __init__(self, x: int, y: int):
+      self.x = x
+      self.y = y
+
+   def __add__(self, other: Vec2) -> Vec2:
+      new_x = self.x + other.x
+      new_y = self.y + other.y
+      return Vec2(new_x, new_y)
+
+   def area(self) -> int:
+      area: int = self.x * self.y
+      return area

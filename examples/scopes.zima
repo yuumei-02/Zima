@@ -1,0 +1,13 @@
+// Copyright (c) 2026 yuumei-02. All Rights Reserved.
+// See the LICENSE file for more information.
+
+// New scopes can be created inside of code blocks.
+// These scopes may also be named via a string literal.
+// Scopes don't provide any functionality to program. They are purely there to split procedures into smaller,
+// more manageable chunks without having to create sub procedures.
+
+def main() -> int:
+   scope:
+      return 40
+   scope "named scope":
+      return 90
