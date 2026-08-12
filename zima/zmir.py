@@ -98,12 +98,12 @@ class TypeAggregate(Type):
    kind = TypeKind.Aggregate
    fields: list[tuple[int, TypeId]] # A tuple of padding and the field type
    byte_size: int
-   alignment: int
+   memry_alignment: int
    name: str
 
    def __init__(self, name: str, type_table: list[Type], fields: list[TypeId]):
       self.fields = []
-      self.alignment = 0
+      self.memory_alignment = 0
       self.byte_size = 0
       self.name = name
 
@@ -116,14 +116,14 @@ class TypeAggregate(Type):
          address += field_padding + field_size
          self.fields.append((field_padding, type_id))
          self.byte_size += field_padding + field_size
-         if field_alignment > self.alignment:
-            self.alignment = field_alignment
+         if field_alignment > self.memory_alignment:
+            self.memory_alignment = field_alignment
 
    def size(self) -> int:
       return self.byte_size
 
    def alignment(self) -> int:
-      return self.alignment
+      return self.memory_alignment
 
    def to_str(self, type_table: list["Type"]) -> str:
       return f"Aggregate[{self.name}]"
