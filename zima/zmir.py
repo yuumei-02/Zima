@@ -246,15 +246,15 @@ class ZMIR:
       ]
       self.procedures = []
 
-   def instrinsic_i1(self) -> int: return 0
-   def instrinsic_i8(self) -> int: return 1
-   def instrinsic_i16(self) -> int: return 2
-   def instrinsic_i32(self) -> int: return 3
-   def instrinsic_i64(self) -> int: return 4
-   def instrinsic_u8(self) -> int: return 5
-   def instrinsic_u16(self) -> int: return 6
-   def instrinsic_u32(self) -> int: return 7
-   def instrinsic_u64(self) -> int: return 8
+   def intrinsic_i1(self) -> int: return 0
+   def intrinsic_i8(self) -> int: return 1
+   def intrinsic_i16(self) -> int: return 2
+   def intrinsic_i32(self) -> int: return 3
+   def intrinsic_i64(self) -> int: return 4
+   def intrinsic_u8(self) -> int: return 5
+   def intrinsic_u16(self) -> int: return 6
+   def intrinsic_u32(self) -> int: return 7
+   def intrinsic_u64(self) -> int: return 8
 
    def add_procedure(self, procedure: Procedure) -> None:
       self.procedures.append(procedure)
@@ -326,8 +326,8 @@ def test_ir() -> ZMIR:
    ir = ZMIR()
 
    main = Procedure("main", [], (-1, -1))
-   v1 = main.add_value(ir.instrinsic_i32())
-   v2 = main.add_value(ir.instrinsic_i32())
+   v1 = main.add_value(ir.intrinsic_i32())
+   v2 = main.add_value(ir.intrinsic_i32())
 
    i1 = main.add_bin_op(InstrKind.Add, v1, v2)
    main.add_ret(i1)

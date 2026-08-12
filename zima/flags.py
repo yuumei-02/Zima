@@ -6,6 +6,7 @@ class CompileFlags:
    ast_dump: bool
    ir_dump: bool
    ir_test: bool
+   no_core: bool
    core_path: str
 
    def __init__(self) -> None:
@@ -13,4 +14,5 @@ class CompileFlags:
       self.ast_dump = False
       self.ir_dump = False
       self.ir_test = False
+      self.no_core = False
       self.core_path = "./core/core.zima"

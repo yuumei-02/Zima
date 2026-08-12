@@ -20,7 +20,7 @@ def compile_program(file: str, flags: CompileFlags) -> bool:
       token_dump(file)
       return False
 
-   ast: parser.Ast | None = parser.Parser.parse_file(file, flags.core_path)
+   ast: parser.Ast | None = parser.Parser.parse_file(file, flags.no_core, flags.core_path)
    if ast is None:
       return True
 
@@ -56,6 +56,7 @@ def main() -> None:
          case "--ast-dump":   flags.ast_dump = True
          case "--ir-dump":    flags.ir_dump = True
          case "--ir-test":    flags.ir_test = True
+         case "--no-core":    flags.no_core = True
          case _:
             if args[i + 1].startswith("--core-path="):
                flags.core_path = args[i + 1].removeprefix("--core-path=")
@@ -69,4 +70,3 @@ def main() -> None:
 
 if __name__ == "__main__":
    main()
-

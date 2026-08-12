@@ -1133,15 +1133,16 @@ class Ast:
 
 class Parser:
    @staticmethod
-   def parse_file(file_path: str, core_path: str) -> Ast | None:
+   def parse_file(file_path: str, no_core: bool, core_path: str) -> Ast | None:
       ast = Ast()
       state = ParsingState()
 
-      core = AstModule.parse(core_path, ast, state)
-      if state.failure: panic("unreachable")
-      if core:
-         print(f"[ERROR] Couldn't find the core library at path \"{core_path}\".", file=sys.stderr)
-         return None
+      if not no_core:
+         core = AstModule.parse(core_path, ast, state)
+         if state.failure: panic("unreachable")
+         if core:
+            print(f"[ERROR] Couldn't find the core library at path \"{core_path}\".", file=sys.stderr)
+            return None
 
       module = AstModule.parse(file_path, ast, state)
       if state.failure: return None
